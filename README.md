@@ -90,6 +90,12 @@ cd dsh-device-fleet && pnpm install
 - 所有会话操作与 PC 本人在 GUI 里的操作同权同限，PC 侧随时可围观接管。
 - **无任何第三方依赖**：不读取、不依赖 spark-link 或其它外部应用的状态；密钥与配对状态全部存在插件自有文件 `~/.dsh/device-fleet.json`（0600，原子写）。
 
+## 零重启更新（v0.4.0）
+
+插件代码分为**稳定壳**（socket 闸门、工具 schema，`lib/server.js` / `lib/tools.js`）与**热交换实现**（`lib/worker-impl.js` / `lib/controller-impl.js`）。壳在每次请求/调用时检测实现文件的 mtime 签名，变化即通过 cache-busting 动态 import 加载新一代代码。
+
+因此自更新流程缩减为一条指令：controller 派发 `git pull` 任务 → pull 落地 → 下一个请求/工具调用即是新代码，**两端都不需要重启 DSH**。
+
 ## 路线
 
 - [x] v0.1：worker 路由 + controller 工具（list/dispatch/steer/stop/status）
