@@ -184,6 +184,7 @@ export function apply(ctx, config) {
 				resolveToken: async () => resolved.token,
 				resolvePeers: async () => Object.entries(await pinnedPeers()).map(([name, peer]) => ({ name, url: peer.url })),
 				pairPeer: (name, url, token) => pinPeer(name, url, token),
+				pinnedToken: async (name) => (await pinnedPeers())[name]?.token ?? '',
 				controllerName: hostname() || 'dsh-controller',
 			});
 			for (const definition of tools) {
