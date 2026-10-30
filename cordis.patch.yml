@@ -9,6 +9,6 @@
       config:
         role: worker+controller
         host: 0.0.0.0
-        port: 8791
+        port: 48791
         token: ""
         workers: []

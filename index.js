@@ -45,7 +45,7 @@ export const Config = {
 		},
 		port: {
 			type: 'number',
-			default: 8791,
+			default: 48791,
 			description: 'Worker TCP port. Must not collide with spark-link (8766) or the DSH GUI port.',
 		},
 		token: {
@@ -56,7 +56,7 @@ export const Config = {
 		workers: {
 			type: 'array',
 			default: [],
-			description: 'Worker endpoints this machine may drive, for example [{name: "pc", url: "http://192.168.1.74:8791", token: "..."}].',
+			description: 'Worker endpoints this machine may drive, for example [{name: "pc", url: "http://192.168.1.74:48791", token: "..."}].',
 			items: {
 				type: 'object',
 				additionalProperties: false,
@@ -86,7 +86,7 @@ export function apply(ctx, config) {
 				let close = async () => {};
 				const server = startWorkerServer({
 					host: config.host ?? '0.0.0.0',
-					port: config.port ?? 8791,
+					port: config.port ?? 48791,
 					token: config.token ?? '',
 					deviceName: hostname() || 'dsh-worker',
 					workspaceRegistry: ctx.workspaceRegistry,

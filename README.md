@@ -58,13 +58,13 @@ git clone https://github.com/neil-ji/dsh-device-fleet.git
         token: "<长随机串>"
         workers:                        # controller 侧列出要驱动的设备
           - name: pc
-            url: "http://192.168.1.74:8791"
+            url: "http://192.168.1.74:48791"
 ```
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | `role` | `worker+controller` | `worker` / `controller` / 两者 |
-| `host` / `port` | `0.0.0.0` / `8791` | worker 监听；勿与 spark-link 8766 冲突 |
+| `host` / `port` | `0.0.0.0` / `48791` | worker 监听；勿与 spark-link 8766 冲突 |
 | `token` | （空） | 共享 Bearer 密钥；空则 worker 拒绝启动 |
 | `workers` | `[]` | controller 侧的 worker 名单（worker 侧可不配） |
 
