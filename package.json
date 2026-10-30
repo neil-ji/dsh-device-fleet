@@ -32,6 +32,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.png",
+    "icon.svg",
     "README.md"
   ],
   "dependencies": {

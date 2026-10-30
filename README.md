@@ -53,6 +53,8 @@ git clone https://github.com/neil-ji/dsh-device-fleet.git
 cd dsh-device-fleet && pnpm install
 ```
 
+插件页图标由 `exports["./icon"]` 指向 `icon.png`；同目录还留一份 `icon.svg`，给按文件名读 `icon.svg` 的旧客户端兜底，两份画的是同一幅图案。
+
 ## 面板
 
 左侧栏「插件 → 设备舰队」是一页状态与控制面板（浏览器半端 `client.js`，端点 `/api/device-fleet`，带页面令牌）：
