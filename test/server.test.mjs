@@ -227,3 +227,41 @@ test('fleet/recent shapes the session event array and filters system messages', 
 		await server.close();
 	}
 });
+
+test('TOFU: hello discloses token until claimed, then stops', async () => {
+	let claimed = false;
+	const pairing = {
+		isClaimable: async () => !claimed,
+		discloseToken: async () => 'fresh-token',
+		claim: async () => { claimed = true; },
+	};
+	const server = await startWorkerServer({
+		host: '127.0.0.1',
+		port: 0,
+		token: 'sekret',
+		deviceName: 'test-pc',
+		workspaceRegistry: fakeWorkspaces(),
+		sessionController: fakeSessions(),
+		pairing,
+	});
+	try {
+		const base = `http://127.0.0.1:${server.port}`;
+		const hello = await (await fetch(`${base}/fleet/hello`)).json();
+		assert.equal(hello.claimable, true);
+		assert.equal(hello.token, 'fresh-token');
+		const claimedRes = await fetch(`${base}/fleet/claim`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer sekret', 'content-type': 'application/json' },
+			body: JSON.stringify({ controller: 'mac' }),
+		});
+		assert.equal(claimedRes.status, 200);
+		const helloAfter = await (await fetch(`${base}/fleet/hello`)).json();
+		assert.equal(helloAfter.claimable, false);
+		assert.equal(helloAfter.token, undefined);
+		// claim 本身必须带 token：无凭证的 claim 被闸门拒绝
+		const unauthClaim = await fetch(`${base}/fleet/claim`, { method: 'POST', body: '{}' });
+		assert.equal(unauthClaim.status, 401);
+	} finally {
+		await server.close();
+	}
+});

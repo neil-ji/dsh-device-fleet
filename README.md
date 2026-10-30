@@ -69,7 +69,7 @@ cd dsh-device-fleet && pnpm install
 
 | 值 | 自动来源 |
 | --- | --- |
-| `token` | 借用 spark-link 配对密钥材料（两端 `~/.spark-link/state.json` 同源） |
+| `token` | worker 首次激活自动生成并持久化（`~/.dsh/device-fleet.json`）；controller 首连通过 TOFU（`/fleet/hello`）自动配对 |
 | worker 名字 | 本机 hostname |
 | worker LAN 地址 | 网卡枚举（announce 携带真实内网 IP） |
 | controller 的 worker 名单 | 组播自动发现（`239.255.77.79:48792`，首次 `fleet_list_workers` 时扫描并缓存） |
@@ -79,7 +79,7 @@ cd dsh-device-fleet && pnpm install
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | `role` | `worker+controller` | `worker` / `controller` / 两者 |
-| `host` / `port` | `0.0.0.0` / `48791` | worker 监听；勿与 spark-link 8766 冲突 |
+| `host` / `port` | `0.0.0.0` / `48791` | worker 监听地址与端口 |
 | `token` | （空 → 自动） | 显式共享密钥，设置后两端必须一致 |
 | `workers` | `[]` | 静态 worker 名单，绕过自动发现 |
 
@@ -88,10 +88,12 @@ cd dsh-device-fleet && pnpm install
 - 只面向家庭局域网；独立端口、独立 Bearer 鉴权，不复用不削弱 GUI 鉴权。
 - 无命令执行面：worker 只暴露工作区/会话级别的 GUI 等价操作。
 - 所有会话操作与 PC 本人在 GUI 里的操作同权同限，PC 侧随时可围观接管。
+- **无任何第三方依赖**：不读取、不依赖 spark-link 或其它外部应用的状态；密钥与配对状态全部存在插件自有文件 `~/.dsh/device-fleet.json`（0600，原子写）。
 
 ## 路线
 
 - [x] v0.1：worker 路由 + controller 工具（list/dispatch/steer/stop/status）
-- [x] v0.2：零配置化——token 自动借取 spark-link 配对材料、组播自动发现 worker、名字/地址自动取值
+- [x] v0.2：零配置化——组播自动发现、名字/地址自动取值
+- [x] v0.3：完全去第三方依赖——TOFU 配对（`/fleet/hello` 首用披露 token，首个 controller claim 后封闭）、插件自有持久化（`~/.dsh/device-fleet.json`）、pinned peers 单播兜底发现
 - [ ] ask question 跨机转发（PC 会话提问 → Mac agent 应答）
 - [ ] 会话事件流跟随（follow）与任务面板观测 UI

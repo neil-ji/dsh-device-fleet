@@ -174,7 +174,7 @@ window.__ModuleLoader__.load({
 			const data = state
 			const listening = data?.listening === true
 			const keyHint =
-				data?.tokenSource === 'explicit' ? '显式配置的共享密钥' : data?.tokenSource === 'spark-link' ? '自动借用 spark-link 配对密钥' : '未就绪（缺少 spark-link 配对且未配置 token）'
+				data?.tokenSource === 'explicit' ? '显式配置的共享密钥' : data?.tokenSource === 'generated' ? '首次激活自动生成' : '未就绪'
 			const discovered = data?.discovered ?? []
 			const workers = data?.workers ?? []
 
@@ -268,7 +268,7 @@ window.__ModuleLoader__.load({
 						error ? h('span', { className: 'fleet-error' }, error) : null,
 						!error && notice ? h('span', { className: 'fleet-ok' }, notice) : null,
 					),
-					h('span', { className: 'fleet-hint' }, '密钥只写不读：表单里永远是空的，留空即沿用当前值。留空且已配对 spark-link 时，会自动借用其配对密钥。'),
+					h('span', { className: 'fleet-hint' }, '密钥只写不读：表单里永远是空的，留空即沿用当前值。留空时 worker 首次激活自动生成密钥，controller 首连通过 TOFU 自动配对。'),
 				),
 				h(
 					'div',

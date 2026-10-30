@@ -1,37 +1,48 @@
 /**
- * Auto-credential resolution tests: the spark-link borrowing path and the
- * refuse-when-nothing-applies path.
+ * Plugin-native identity tests: worker token generation/persistence, claim
+ * lifecycle, and controller-side pinning. No external state files involved.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveFleetToken } from '../lib/credentials.js';
+import { ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, readStore, STORE_PATH } from '../lib/credentials.js';
 
-test('borrows spark-link pairing material when present', async () => {
+async function tempStore() {
 	const dir = await mkdtemp(join(tmpdir(), 'fleet-'));
-	const statePath = join(dir, 'state.json');
-	await writeFile(
-		statePath,
-		JSON.stringify({
-			identity: { device_id: 'a', name: 'mac' },
-			devices: {
-				pc1: { device_id: 'b', name: 'HANSOMENEIL', enc: 'sRI1YsJ5l9dGLCD6hQx+qG+MoPIhviJNWe9jP6iRAT4=', sig: 'x' },
-			},
-		}),
-	);
-	const resolved = await resolveFleetToken(statePath);
-	assert.ok(resolved !== null);
-	assert.equal(resolved.token, 'sRI1YsJ5l9dGLCD6hQx+qG+MoPIhviJNWe9jP6iRAT4=');
-	assert.match(resolved.source, /state\.json$/);
+	return join(dir, 'device-fleet.json');
+}
+
+test('worker token is generated once and stable across reads', async () => {
+	const store = await tempStore();
+	const first = await ensureWorkerToken(store);
+	const again = await ensureWorkerToken(store);
+	assert.equal(first, again);
+	assert.ok(first.length >= 40);
+	const persisted = await readStore(store);
+	assert.equal(persisted.workerToken, first);
 });
 
-test('returns null when no state file or no usable entry exists', async () => {
-	assert.equal(await resolveFleetToken(join(tmpdir(), 'fleet-missing', 'state.json')), null);
-	const dir = await mkdtemp(join(tmpdir(), 'fleet-'));
-	const statePath = join(dir, 'state.json');
-	await writeFile(statePath, JSON.stringify({ identity: { device_id: 'a' }, devices: {} }));
-	assert.equal(await resolveFleetToken(statePath), null);
+test('claim lifecycle: claimable until marked, then not', async () => {
+	const store = await tempStore();
+	assert.equal(await isClaimable(store), true);
+	await markClaimed('mac', store);
+	assert.equal(await isClaimable(store), false);
+	const persisted = await readStore(store);
+	assert.equal(persisted.claimedBy, 'mac');
+});
+
+test('controller pinning round-trips peers', async () => {
+	const store = await tempStore();
+	await pinPeer('HANSOMENEIL', 'http://192.168.1.74:48791', 'tok-1', store);
+	await pinPeer('HANSOMENEIL', 'http://192.168.1.74:48791', 'tok-2', store);
+	const peers = await pinnedPeers(store);
+	assert.deepEqual(peers, { HANSOMENEIL: { url: 'http://192.168.1.74:48791', token: 'tok-2' } });
+});
+
+test('default store path lives under the DSH home, plugin-owned', async () => {
+	assert.ok(STORE_PATH.includes('.dsh'));
+	assert.ok(STORE_PATH.endsWith('device-fleet.json'));
 });

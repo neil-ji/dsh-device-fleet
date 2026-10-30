@@ -1,6 +1,6 @@
 {
   "name": "dsh-device-fleet",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": false,
   "type": "module",
   "description": "DSH fleet plugin: a controller DSH drives worker DSH instances over the LAN through GUI-parity session APIs.",

@@ -24,7 +24,7 @@
 import { hostname } from 'node:os';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
-import { resolveFleetPeers, resolveFleetToken } from './lib/credentials.js';
+import { ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers } from './lib/credentials.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
@@ -56,7 +56,7 @@ try {
 		role: Schema.union(ROLES).default('worker+controller').description('worker 暴露本机；controller 提供委派工具。'),
 		host: Schema.string().default(DEFAULT_HOST).description('worker 监听地址。'),
 		port: Schema.natural().default(DEFAULT_PORT).description('worker 监听端口。'),
-		token: Schema.string().default('').description('留空自动借用 spark-link 配对密钥；显式设置时两端必须一致。'),
+		token: Schema.string().default('').description('留空则 worker 首次激活时自动生成并持久化，controller 首连自动配对（TOFU）；显式设置时两端必须一致。'),
 		workers: Schema.array(
 			Schema.object({
 				name: Schema.string().description('worker 名称，工具调用时使用。'),
@@ -120,15 +120,12 @@ export function apply(ctx, config) {
 		};
 
 		/**
-		 * Late token resolution: explicit config first, then the spark-link
-		 * pairing material. An empty result disables the worker and leaves
-		 * discovered workers unpingable — the LAN surface never runs
-		 * unauthenticated.
+		 * Explicit config token wins; otherwise the worker generates and
+		 * persists its own token on first activation (plugin-owned store).
 		 */
 		const resolveToken = async () => {
 			if (resolved.token !== '') return resolved.token;
-			const borrowed = await resolveFleetToken();
-			return borrowed?.token ?? '';
+			return ensureWorkerToken();
 		};
 
 		ctx.effect(() => mountFleetPanel({ ctx, state, discovered }), 'device-fleet: 设置页端点');
@@ -138,11 +135,8 @@ export function apply(ctx, config) {
 				let closeServer = async () => {};
 				let closeAnnounce = async () => {};
 				const running = (async () => {
+					const generated = resolved.token === '';
 					const token = await resolveToken();
-					if (token === '') {
-						console.error('[device-fleet] worker disabled: no token available (set config.token or pair spark-link)');
-						return;
-					}
 					const handle = await startWorkerServer({
 						host: resolved.host,
 						port: resolved.port,
@@ -151,11 +145,20 @@ export function apply(ctx, config) {
 						workspaceRegistry: ctx.workspaceRegistry,
 						sessionController: ctx.sessionController,
 						sessionQuery: ctx.sessionQuery,
+						// TOFU pairing is offered only for a generated token; an
+						// explicit config token is never disclosed over the wire.
+						pairing: generated
+							? {
+								isClaimable: () => isClaimable(),
+								discloseToken: () => ensureWorkerToken(),
+								claim: (name) => markClaimed(name),
+							}
+							: undefined,
 					});
 					state.listening = true;
 					state.port = handle.port;
 					state.tokenSet = true;
-					state.tokenSource = resolved.token !== '' ? 'explicit' : 'spark-link';
+					state.tokenSource = resolved.token !== '' ? 'explicit' : generated ? 'generated' : 'explicit';
 					console.log(`[device-fleet] worker listening on ${resolved.host}:${handle.port}`);
 					closeServer = handle.close;
 					try {
@@ -178,8 +181,10 @@ export function apply(ctx, config) {
 			const tools = createToolDefinitions({
 				workers: resolved.workers,
 				discovered,
-				resolveToken,
-				resolvePeers: () => resolveFleetPeers(undefined, resolved.port),
+				resolveToken: async () => resolved.token,
+				resolvePeers: async () => Object.entries(await pinnedPeers()).map(([name, peer]) => ({ name, url: peer.url })),
+				pairPeer: (name, url, token) => pinPeer(name, url, token),
+				controllerName: hostname() || 'dsh-controller',
 			});
 			for (const definition of tools) {
 				ctx.effect(() => ctx.tools.register(definition));

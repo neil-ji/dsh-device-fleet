@@ -1,9 +1,10 @@
 # Inserts only this plugin's own row; no shipped DSH component is replaced.
 #
-# Zero-config by default: the token is borrowed from the spark-link pairing
-# (~/.spark-link/state.json) and workers are found by multicast discovery.
-# Set `token` here only to override the borrowed secret — when you do, use the
-# identical value on every machine.
+# Zero-config by default: the worker generates and persists its own token on
+# first activation, the controller pairs by trust-on-first-use (/fleet/hello
+# discloses the token until the first claim), and workers are found by
+# multicast discovery plus the controller's pinned-peer store. Set `token`
+# here only to opt out of TOFU — then use the identical value on both ends.
 - insert:
     - id: device-fleet
       name: dsh-device-fleet
