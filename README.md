@@ -47,26 +47,25 @@ git clone https://github.com/neil-ji/dsh-device-fleet.git
 
 在 DSH 插件页选择该目录，或用 `plugin_manager install_bundle`（target 传绝对路径）。
 
-## 配置
+## 配置（默认零配置）
 
-两端都要在**用户 patch 层**设置相同的 `token`（插件拒绝空 token 启动）：
+两端装上即可用，不需要手工填任何值：
 
-```yaml
-- override:
-    - id: device-fleet
-      config:
-        token: "<长随机串>"
-        workers:                        # controller 侧列出要驱动的设备
-          - name: pc
-            url: "http://192.168.1.74:48791"
-```
+| 值 | 自动来源 |
+| --- | --- |
+| `token` | 借用 spark-link 配对密钥材料（两端 `~/.spark-link/state.json` 同源） |
+| worker 名字 | 本机 hostname |
+| worker LAN 地址 | 网卡枚举（announce 携带真实内网 IP） |
+| controller 的 worker 名单 | 组播自动发现（`239.255.77.79:48792`，首次 `fleet_list_workers` 时扫描并缓存） |
+
+仅当需要覆盖时才在**用户 patch 层**设置：
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | `role` | `worker+controller` | `worker` / `controller` / 两者 |
 | `host` / `port` | `0.0.0.0` / `48791` | worker 监听；勿与 spark-link 8766 冲突 |
-| `token` | （空） | 共享 Bearer 密钥；空则 worker 拒绝启动 |
-| `workers` | `[]` | controller 侧的 worker 名单（worker 侧可不配） |
+| `token` | （空 → 自动） | 显式共享密钥，设置后两端必须一致 |
+| `workers` | `[]` | 静态 worker 名单，绕过自动发现 |
 
 ## 安全模型
 
@@ -77,6 +76,6 @@ git clone https://github.com/neil-ji/dsh-device-fleet.git
 ## 路线
 
 - [x] v0.1：worker 路由 + controller 工具（list/dispatch/steer/stop/status）
+- [x] v0.2：零配置化——token 自动借取 spark-link 配对材料、组播自动发现 worker、名字/地址自动取值
 - [ ] ask question 跨机转发（PC 会话提问 → Mac agent 应答）
 - [ ] 会话事件流跟随（follow）与任务面板观测 UI
-- [ ] 组播自动发现（对齐 spark-link §2，错开端口）

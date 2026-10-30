@@ -21,12 +21,17 @@
  * @module dsh-device-fleet
  */
 
-import { homedir, hostname } from 'node:os';
+import { hostname } from 'node:os';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
+import { resolveFleetToken } from './lib/credentials.js';
+import { startAnnouncing } from './lib/discovery.js';
 
 /** @type {string[]} Services this plugin needs from the Host composition. */
 export const inject = ['tools', 'workspaceRegistry', 'sessionController'];
+
+/** Auto-discovered workers, shared across tool calls and populated by fleet_list_workers. */
+const discovered = new Map();
 
 /** Roles accepted by `config.role`. */
 const ROLES = ['worker+controller', 'worker', 'controller'];
@@ -59,7 +64,7 @@ try {
 			.description('Worker TCP port. Must not collide with spark-link (8766) or the DSH GUI port.'),
 		token: Schema.string()
 			.default('')
-			.description('Shared Bearer secret. The worker refuses to start with an empty token; set the identical value on controller and worker.'),
+			.description('Shared Bearer secret. Empty (default) borrows the spark-link pairing material automatically; set this only to override.'),
 		workers: Schema.array(
 			Schema.object({
 				name: Schema.string().description('Stable name the Agent uses in tool calls.'),
@@ -68,7 +73,7 @@ try {
 			}),
 		)
 			.default([])
-			.description('Worker endpoints this machine may drive, for example [{name: "pc", url: "http://192.168.1.74:48791", token: "..."}].'),
+			.description('Optional static worker endpoints. Workers are otherwise found by multicast discovery on first fleet_list_workers call.'),
 	});
 } catch {
 	Config = undefined;
@@ -110,33 +115,56 @@ export function apply(ctx, config) {
 		const resolved = normalizeConfig(config);
 		const role = resolved.role;
 
+		const deviceName = hostname() || 'dsh-worker';
+		/**
+		 * Late token resolution: explicit config first, then the spark-link
+		 * pairing material. An empty result disables the worker and leaves
+		 * discovered workers unpingable — the LAN surface never runs
+		 * unauthenticated.
+		 */
+		const resolveToken = async () => {
+			if (resolved.token !== '') return resolved.token;
+			const borrowed = await resolveFleetToken();
+			return borrowed?.token ?? '';
+		};
+
 		if (role.includes('worker')) {
 			ctx.effect(() => {
-				let close = async () => {};
-				const server = startWorkerServer({
-					host: resolved.host,
-					port: resolved.port,
-					token: resolved.token,
-					deviceName: hostname() || 'dsh-worker',
-					workspaceRegistry: ctx.workspaceRegistry,
-					sessionController: ctx.sessionController,
-				})
-					.then((handle) => {
-						console.log(`[device-fleet] worker listening on ${resolved.host}:${handle.port}`);
-						close = handle.close;
-					})
-					.catch((error) => {
-						console.error('[device-fleet] worker listener failed:', error instanceof Error ? error.message : error);
+				let closeServer = async () => {};
+				let closeAnnounce = async () => {};
+				const running = (async () => {
+					const token = await resolveToken();
+					if (token === '') {
+						console.error('[device-fleet] worker disabled: no token available (set config.token or pair spark-link)');
+						return;
+					}
+					const handle = await startWorkerServer({
+						host: resolved.host,
+						port: resolved.port,
+						token,
+						deviceName,
+						workspaceRegistry: ctx.workspaceRegistry,
+						sessionController: ctx.sessionController,
 					});
+					console.log(`[device-fleet] worker listening on ${resolved.host}:${handle.port}`);
+					closeServer = handle.close;
+					try {
+						const announcer = await startAnnouncing({ port: handle.port, deviceName });
+						closeAnnounce = announcer;
+					} catch (error) {
+						console.error('[device-fleet] announcing unavailable (discovery will not find this worker):', error instanceof Error ? error.message : error);
+					}
+				})();
 				return async () => {
-					await server.catch(() => {});
-					await close();
+					await running.catch(() => {});
+					await closeAnnounce();
+					await closeServer();
 				};
 			});
 		}
 
 		if (role.includes('controller')) {
-			const tools = createToolDefinitions({ workers: resolved.workers });
+			const tools = createToolDefinitions({ workers: resolved.workers, discovered, resolveToken });
 			for (const definition of tools) {
 				ctx.effect(() => ctx.tools.register(definition));
 			}

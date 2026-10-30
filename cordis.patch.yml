@@ -1,8 +1,9 @@
 # Inserts only this plugin's own row; no shipped DSH component is replaced.
 #
-# token: shared secret the worker requires on every request (Bearer). Never ship
-# a real token here; set it in the user's patch layer on BOTH machines and keep
-# them identical. An empty token refuses to start the LAN listener on purpose.
+# Zero-config by default: the token is borrowed from the spark-link pairing
+# (~/.spark-link/state.json) and workers are found by multicast discovery.
+# Set `token` here only to override the borrowed secret — when you do, use the
+# identical value on every machine.
 - insert:
     - id: device-fleet
       name: dsh-device-fleet
