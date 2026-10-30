@@ -96,6 +96,19 @@ cd dsh-device-fleet && pnpm install
 
 因此自更新流程缩减为一条指令：controller 派发 `git pull` 任务 → pull 落地 → 下一个请求/工具调用即是新代码，**两端都不需要重启 DSH**。
 
+### 源码热重载（推荐，无需重启）
+
+DSH 自带 HMR，但基础 bundle 里的 `hmr` 行默认 `root: []`——**只监听显式配置，不监听源码**。把插件检出目录加进监听根即可（本机 `~/.dsh/profiles/desktop/cordis.patch.yml`）：
+
+```yaml
+- id: hmr
+  config:
+    root:
+      - /Users/neilji/AIGC/dsh-device-fleet
+```
+
+实测（本仓库）：改壳文件后 12 秒内新代码即生效——加一个响应头探针，`curl` 立刻能读到，**无需重启应用**。注意 HMR 需要 CJS/ESM 模块缓存可替换（DSH Desktop 满足）；源码若在 profile 的 `node_modules` 之外且未被 `root` 覆盖，则只会随 profile 重组时才替换。
+
 ### 什么时候还需要重启（只由人决定）
 
 热交换覆盖的是**实现**（`worker-impl.js` / `controller-impl.js`）。只有改动**壳**（`lib/server.js`、`lib/tools.js`、`index.js`——socket 闸门、工具 schema 注册）才需要重载一次应用；因此壳里不放任何逻辑，只做注册与 delegate。
