@@ -1,0 +1,14 @@
+# Inserts only this plugin's own row; no shipped DSH component is replaced.
+#
+# token: shared secret the worker requires on every request (Bearer). Never ship
+# a real token here; set it in the user's patch layer on BOTH machines and keep
+# them identical. An empty token refuses to start the LAN listener on purpose.
+- insert:
+    - id: device-fleet
+      name: dsh-device-fleet
+      config:
+        role: worker+controller
+        host: 0.0.0.0
+        port: 8791
+        token: ""
+        workers: []

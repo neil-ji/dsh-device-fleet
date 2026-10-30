@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Device Fleet",
+    "description": "Delegates heavy tasks to DSH instances on other home-LAN machines: the local Agent drives remote workspaces and sessions through GUI-parity tools."
+  }
+}
