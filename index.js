@@ -29,7 +29,7 @@ import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
 /** @type {string[]} Services this plugin needs from the Host composition. */
-export const inject = ['tools', 'workspaceRegistry', 'sessionController', 'webServer'];
+export const inject = ['tools', 'workspaceRegistry', 'sessionController', 'sessionQuery', 'webServer'];
 
 /** Auto-discovered workers, shared across tool calls and populated by fleet_list_workers. */
 const discovered = new Map();
@@ -150,6 +150,7 @@ export function apply(ctx, config) {
 						deviceName,
 						workspaceRegistry: ctx.workspaceRegistry,
 						sessionController: ctx.sessionController,
+						sessionQuery: ctx.sessionQuery,
 					});
 					state.listening = true;
 					state.port = handle.port;
