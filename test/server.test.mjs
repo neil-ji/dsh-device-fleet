@@ -99,7 +99,11 @@ test('ping, workspaces and session shaping', async () => {
 	const worker = { name: 'test', url: `http://127.0.0.1:${server.port}`, token: 'sekret' };
 	try {
 		const ping = await pingWorker(worker);
-		assert.deepEqual(ping, { online: true, device: 'test-pc' });
+		assert.equal(ping.online, true);
+		assert.equal(ping.device, 'test-pc');
+		// build identity rides along; both fields are present in a checkout
+		assert.equal(typeof ping.version, 'string');
+		assert.equal(typeof ping.commit, 'string');
 
 		const workspaces = await callWorker(worker, 'GET', '/fleet/workspaces');
 		assert.deepEqual(workspaces.items, [
