@@ -96,22 +96,43 @@ cd dsh-device-fleet && pnpm install
 
 因此自更新流程缩减为一条指令：controller 派发 `git pull` 任务 → pull 落地 → 下一个请求/工具调用即是新代码，**两端都不需要重启 DSH**。
 
-### 什么时候还需要重启
+### 什么时候还需要重启（只由人决定）
 
 热交换覆盖的是**实现**（`worker-impl.js` / `controller-impl.js`）。只有改动**壳**（`lib/server.js`、`lib/tools.js`、`index.js`——socket 闸门、工具 schema 注册）才需要重载一次应用；因此壳里不放任何逻辑，只做注册与 delegate。
 
-需要时的自愈命令（macOS，重启后 DSH 自动回来，会话从持久日志恢复）：
+**硬规则：agent 不得自行重启 DSH。** 自助重载在本项目里被实际踩过两次坑：`nohup` 子进程随应用被回收导致应用再也起不来；改用 `launchctl submit` 后任务又被反复拉起，把正在进行的会话连续中断。壳改动只汇报「需要一次重载」，由人挑时机。
 
-```bash
-scripts/restart-mac.sh
+供人使用（若你确实想用脚本）`scripts/restart-mac.sh`，但它只解决「退出后能自动回来」，不解决「什么时候该退出」。
+
+## 实战用法（已端到端验证）
+
+一次跨机任务的完整闭环，全部走真实工具调用：
+
+```text
+fleet_list_workers                       # 谁在线（冷启动会自动扫一次）
+fleet_list_workspaces  { worker }        # 已注册工作区 → 决定复用还是新建
+fleet_list_sessions    { worker }        # 已有会话（标题/running/排队数/cwd）
+fleet_dispatch         { worker, workspaceId|cwd|sessionId, prompt }
+fleet_status           { worker, sessionId }     # running / queuedTurns
+fleet_recent           { worker, sessionId }     # 读回结论（单条上限 12000 字符）
+fleet_stop             { worker, sessionId }     # 跑偏时停掉，会话保留可续
 ```
 
-它把「重新打开应用」交给 launchd（`launchctl submit`），再由 osascript 退出应用——普通 `nohup ... &` 子进程会随应用一起被回收，应用就再也起不来了（本轮实测踩到）。
+派发出去的 `prompt` 必须是**自包含**的：对端 agent 看不到本端上下文。实践里效果最好的写法是「目标 + 验收标准 + 输出格式 + 字数上限 + 不允许做什么」，并且要求它**自证**（贴真实命令输出，而不是复述设计）。
+
+## 已知限制
+
+- **首次调用**：Host 每次重启后缓存为空，旧版会报 `unknown worker`；现已自动扫一次（`discovered after a fresh scan: ...`），但若 LAN 上确实没人应答，仍会明确失败。
+- **bash 子进程可能到不了 worker**：macOS 局域网权限会让 `fetch` 报 `EHOSTUNREACH`，而插件进程本身正常。判断通道是否可用请用 `fleet_list_workers`，不要用 `curl`/`node` 自测代替。
+- **长任务靠轮询**：`fleet_status` 不会阻塞等待；跨机等待请自己控节奏（例如隔 30–60 秒查一次），不要紧循环。
+- **单条消息 12000 字符上限**：超长报告需分段，或在 `prompt` 里直接要求「不超过 N 字」。
 
 ## 路线
 
 - [x] v0.1：worker 路由 + controller 工具（list/dispatch/steer/stop/status）
 - [x] v0.2：零配置化——组播自动发现、名字/地址自动取值
 - [x] v0.3：完全去第三方依赖——TOFU 配对（`/fleet/hello` 首用披露 token，首个 controller claim 后封闭）、插件自有持久化（`~/.dsh/device-fleet.json`）、pinned peers 单播兜底发现
+- [x] v0.4：零重启更新（壳/实现分离 + 热交换）、冷启动自动扫描
 - [ ] ask question 跨机转发（PC 会话提问 → Mac agent 应答）
+- [ ] `fleet_dispatch` 阻塞模式（派发后直接等到空闲并返回最终结论，减少轮询）
 - [ ] 会话事件流跟随（follow）与任务面板观测 UI
