@@ -96,6 +96,18 @@ cd dsh-device-fleet && pnpm install
 
 因此自更新流程缩减为一条指令：controller 派发 `git pull` 任务 → pull 落地 → 下一个请求/工具调用即是新代码，**两端都不需要重启 DSH**。
 
+### 什么时候还需要重启
+
+热交换覆盖的是**实现**（`worker-impl.js` / `controller-impl.js`）。只有改动**壳**（`lib/server.js`、`lib/tools.js`、`index.js`——socket 闸门、工具 schema 注册）才需要重载一次应用；因此壳里不放任何逻辑，只做注册与 delegate。
+
+需要时的自愈命令（macOS，重启后 DSH 自动回来，会话从持久日志恢复）：
+
+```bash
+scripts/restart-mac.sh
+```
+
+它把「重新打开应用」交给 launchd（`launchctl submit`），再由 osascript 退出应用——普通 `nohup ... &` 子进程会随应用一起被回收，应用就再也起不来了（本轮实测踩到）。
+
 ## 路线
 
 - [x] v0.1：worker 路由 + controller 工具（list/dispatch/steer/stop/status）
