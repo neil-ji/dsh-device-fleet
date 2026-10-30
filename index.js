@@ -182,7 +182,7 @@ export function apply(ctx, config) {
 				workers: resolved.workers,
 				discovered,
 				resolveToken: async () => resolved.token,
-				resolvePeers: async () => Object.entries(await pinnedPeers()).map(([name, peer]) => ({ name, url: peer.url })),
+				resolvePeers: async () => Object.entries(await pinnedPeers()).map(([name, peer]) => ({ name, url: peer.url, token: peer.token })),
 				pairPeer: (name, url, token) => pinPeer(name, url, token),
 				pinnedToken: async (name) => (await pinnedPeers())[name]?.token ?? '',
 				controllerName: hostname() || 'dsh-controller',
