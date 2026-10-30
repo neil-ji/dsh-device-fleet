@@ -47,11 +47,19 @@ git clone https://github.com/neil-ji/dsh-device-fleet.git
 
 在 DSH 插件页选择该目录，或用 `plugin_manager install_bundle`（target 传绝对路径）。
 
-按目录链接安装时 pnpm 不会装这个包的依赖，设置页表单会为空。在插件目录补一次即可：
+按目录链接安装时 pnpm 不会装这个包的依赖，面板会读不到 schema。在插件目录补一次即可：
 
 ```bash
 cd dsh-device-fleet && pnpm install
 ```
+
+## 面板
+
+左侧栏「插件 → 设备舰队」是一页状态与控制面板（浏览器半端 `client.js`，端点 `/api/device-fleet`，带页面令牌）：
+
+- 状态卡：角色、监听地址与端口、密钥来源（显式配置 / 自动借用 spark-link）；
+- 配置卡：改 `role` / `host` / `port` / `token`，保存即写回 profile 的 `cordis.patch.yml` 并立即生效；密钥只写不读；
+- 设备卡：静态名单 + 一次「扫描局域网」得到的组播发现结果。
 
 ## 配置（默认零配置）
 

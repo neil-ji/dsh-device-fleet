@@ -6,21 +6,29 @@
   "description": "DSH fleet plugin: a controller DSH drives worker DSH instances over the LAN through GUI-parity session APIs.",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.png"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
     }
   },
   "files": [
     "index.js",
+    "client.js",
     "lib/server.js",
     "lib/client.js",
     "lib/tools.js",
     "lib/credentials.js",
     "lib/discovery.js",
+    "lib/panel.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.png",

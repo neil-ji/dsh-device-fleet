@@ -26,9 +26,10 @@ import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { resolveFleetToken } from './lib/credentials.js';
 import { startAnnouncing } from './lib/discovery.js';
+import { mountFleetPanel } from './lib/panel.js';
 
 /** @type {string[]} Services this plugin needs from the Host composition. */
-export const inject = ['tools', 'workspaceRegistry', 'sessionController'];
+export const inject = ['tools', 'workspaceRegistry', 'sessionController', 'webServer'];
 
 /** Auto-discovered workers, shared across tool calls and populated by fleet_list_workers. */
 const discovered = new Map();
@@ -107,6 +108,17 @@ export function apply(ctx, config) {
 		const role = resolved.role;
 
 		const deviceName = hostname() || 'dsh-worker';
+		/** What the page shows; `apply` keeps it in step with the listener. */
+		const state = {
+			role,
+			host: resolved.host,
+			port: resolved.port,
+			listening: false,
+			tokenSource: resolved.token !== '' ? 'explicit' : '',
+			tokenSet: resolved.token !== '',
+			workers: resolved.workers.map((worker) => ({ name: worker.name, url: worker.url })),
+		};
+
 		/**
 		 * Late token resolution: explicit config first, then the spark-link
 		 * pairing material. An empty result disables the worker and leaves
@@ -118,6 +130,8 @@ export function apply(ctx, config) {
 			const borrowed = await resolveFleetToken();
 			return borrowed?.token ?? '';
 		};
+
+		ctx.effect(() => mountFleetPanel({ ctx, state, discovered }), 'device-fleet: 设置页端点');
 
 		if (role.includes('worker')) {
 			ctx.effect(() => {
@@ -137,6 +151,10 @@ export function apply(ctx, config) {
 						workspaceRegistry: ctx.workspaceRegistry,
 						sessionController: ctx.sessionController,
 					});
+					state.listening = true;
+					state.port = handle.port;
+					state.tokenSet = true;
+					state.tokenSource = resolved.token !== '' ? 'explicit' : 'spark-link';
 					console.log(`[device-fleet] worker listening on ${resolved.host}:${handle.port}`);
 					closeServer = handle.close;
 					try {
@@ -147,6 +165,7 @@ export function apply(ctx, config) {
 					}
 				})();
 				return async () => {
+					state.listening = false;
 					await running.catch(() => {});
 					await closeAnnounce();
 					await closeServer();
