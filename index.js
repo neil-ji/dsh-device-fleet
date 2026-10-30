@@ -24,7 +24,7 @@
 import { hostname } from 'node:os';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
-import { resolveFleetToken } from './lib/credentials.js';
+import { resolveFleetPeers, resolveFleetToken } from './lib/credentials.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
@@ -175,7 +175,12 @@ export function apply(ctx, config) {
 		}
 
 		if (role.includes('controller')) {
-			const tools = createToolDefinitions({ workers: resolved.workers, discovered, resolveToken });
+			const tools = createToolDefinitions({
+				workers: resolved.workers,
+				discovered,
+				resolveToken,
+				resolvePeers: () => resolveFleetPeers(undefined, resolved.port),
+			});
 			for (const definition of tools) {
 				ctx.effect(() => ctx.tools.register(definition));
 			}
