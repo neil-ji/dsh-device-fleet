@@ -47,6 +47,12 @@ git clone https://github.com/neil-ji/dsh-device-fleet.git
 
 在 DSH 插件页选择该目录，或用 `plugin_manager install_bundle`（target 传绝对路径）。
 
+按目录链接安装时 pnpm 不会装这个包的依赖，设置页表单会为空。在插件目录补一次即可：
+
+```bash
+cd dsh-device-fleet && pnpm install
+```
+
 ## 配置（默认零配置）
 
 两端装上即可用，不需要手工填任何值：

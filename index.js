@@ -43,37 +43,28 @@ const DEFAULT_PORT = 48791;
 /**
  * Declare the row schema in the interface the Loader validates: a Standard
  * Schema (`~standard.validate`), which `@deepseek-ai/schemastery` provides.
- * That package is not a runtime dependency here, so the schema is built when
- * the Host resolves it and omitted otherwise — a plain JSON Schema object in
- * this position makes activation fail, since it has no `~standard` field.
- * `apply` normalizes the raw config either way, so behavior never depends on
- * whether the schema was available.
+ * Only such a schema is projected into the Settings form, so the import is
+ * attempted at load time and stays optional: a checkout whose dependencies
+ * were never installed still activates, just without the form.
+ * `apply` normalizes the raw config either way.
  */
 let Config;
 try {
 	const { default: Schema } = await import('@deepseek-ai/schemastery');
 	Config = Schema.object({
-		role: Schema.union(ROLES)
-			.default('worker+controller')
-			.description('Which halves activate. worker: expose this DSH to the LAN. controller: register delegation tools.'),
-		host: Schema.string()
-			.default(DEFAULT_HOST)
-			.description('Worker bind address. 0.0.0.0 serves the home LAN; use a specific interface address to narrow it.'),
-		port: Schema.natural()
-			.default(DEFAULT_PORT)
-			.description('Worker TCP port. Must not collide with spark-link (8766) or the DSH GUI port.'),
-		token: Schema.string()
-			.default('')
-			.description('Shared Bearer secret. Empty (default) borrows the spark-link pairing material automatically; set this only to override.'),
+		role: Schema.union(ROLES).default('worker+controller').description('worker 暴露本机；controller 提供委派工具。'),
+		host: Schema.string().default(DEFAULT_HOST).description('worker 监听地址。'),
+		port: Schema.natural().default(DEFAULT_PORT).description('worker 监听端口。'),
+		token: Schema.string().default('').description('留空自动借用 spark-link 配对密钥；显式设置时两端必须一致。'),
 		workers: Schema.array(
 			Schema.object({
-				name: Schema.string().description('Stable name the Agent uses in tool calls.'),
-				url: Schema.string().description('Base URL of the worker listener.'),
-				token: Schema.string().description('Bearer token; defaults to this machine\'s worker token.'),
+				name: Schema.string().description('worker 名称，工具调用时使用。'),
+				url: Schema.string().description('worker 地址，如 http://192.168.1.74:48791'),
+				token: Schema.string().description('留空则沿用本机 token。'),
 			}),
 		)
 			.default([])
-			.description('Optional static worker endpoints. Workers are otherwise found by multicast discovery on first fleet_list_workers call.'),
+			.description('静态 worker 名单；留空则首次调用时自动组播发现。'),
 	});
 } catch {
 	Config = undefined;

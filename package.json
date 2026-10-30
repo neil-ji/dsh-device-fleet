@@ -9,7 +9,11 @@
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "files": [
     "index.js",
     "lib/server.js",
@@ -21,5 +25,8 @@
     "locale/*.json",
     "icon.svg",
     "README.md"
-  ]
+  ],
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.18.5"
+  }
 }
