@@ -7,7 +7,7 @@
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
+    "./icon": "./icon.png"
   },
   "dsh": {
     "bundle": {
@@ -23,7 +23,7 @@
     "lib/discovery.js",
     "cordis.patch.yml",
     "locale/*.json",
-    "icon.svg",
+    "icon.png",
     "README.md"
   ],
   "dependencies": {
