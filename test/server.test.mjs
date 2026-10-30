@@ -194,3 +194,36 @@ test('worker refuses to start without a token', async () => {
 		/token/,
 	);
 });
+
+test('fleet/recent shapes the session event array and filters system messages', async () => {
+	const surface = {
+		session: { id: 's9' },
+		capturedThroughSeq: 12,
+		events: [
+			{ type: 'system/message', seq: 1, data: { message: { role: 'system', content: [{ type: 'text', text: 'You are an AI agent...'.repeat(500) }] } } },
+			{ type: 'user/message', seq: 2, data: { role: 'user', content: [{ type: 'text', text: '联调测试' }] } },
+			{ type: 'tool/call', seq: 3, data: { some: 'tool payload' } },
+			{ type: 'assistant/message', seq: 4, data: { message: { role: 'assistant', content: [{ type: 'text', text: '联调成功' }] } } },
+		],
+	};
+	const sessionQuery = { readSurface: async () => surface };
+	const server = await startWorkerServer({
+		host: '127.0.0.1',
+		port: 0,
+		token: 'sekret',
+		deviceName: 'test-pc',
+		workspaceRegistry: fakeWorkspaces(),
+		sessionController: fakeSessions(),
+		sessionQuery,
+	});
+	try {
+		const worker = { name: 'test', url: `http://127.0.0.1:${server.port}`, token: 'sekret' };
+		const value = await callWorker(worker, 'GET', '/fleet/recent?sessionId=s9');
+		assert.deepEqual(value.messages, [
+			{ role: 'user', text: '联调测试' },
+			{ role: 'assistant', text: '联调成功' },
+		]);
+	} finally {
+		await server.close();
+	}
+});
