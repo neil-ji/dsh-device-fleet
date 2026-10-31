@@ -26,7 +26,7 @@ import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers } from './lib/credentials.js';
-import { getDispatch, noteCallback } from './lib/registry.js';
+import { getDispatch, markNotified, noteCallback, wasNotified } from './lib/registry.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
@@ -205,7 +205,7 @@ export function apply(ctx, config) {
 							if (running !== false) return;
 							const id = String(sessionId);
 							const dispatched = getDispatch(id);
-							if (dispatched === undefined) return;
+							if (dispatched === undefined || wasNotified(id)) return;
 							fetch(`${dispatched.callbackUrl}/fleet/callback`, {
 								method: 'POST',
 								headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -225,6 +225,7 @@ export function apply(ctx, config) {
 									} catch {
 										body = { raw: text.slice(0, 200) };
 									}
+									if (response.ok && body?.woke === true) markNotified(id);
 									noteCallback({
 										sessionId: id,
 										ok: response.ok,
