@@ -22,9 +22,11 @@
  */
 
 import { hostname } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers } from './lib/credentials.js';
+import { getDispatch } from './lib/registry.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
@@ -142,6 +144,38 @@ export function apply(ctx, config) {
 						port: resolved.port,
 						token,
 						deviceName,
+						// A paired worker authenticates its completion callback with
+						// the token this side pinned for it, since it never learns
+						// this listener's own token.
+						verifyPeerToken: async (presented) => {
+							const peers = await pinnedPeers();
+							return Object.values(peers).some((peer) => `Bearer ${peer.token}` === presented);
+						},
+						onCallback: async (body) => {
+							const target = String(body?.controllerSessionId ?? '');
+							if (target === '') return false;
+							const agent = ctx.agents.get(target);
+							if (agent === undefined) return false;
+							const text =
+								`[设备舰队] ${String(body?.device ?? 'worker')} 上的会话 ${String(body?.sessionId ?? '')} 已空闲。` +
+								`用 fleet_recent 读取结论（worker="${String(body?.device ?? '')}", sessionId="${String(body?.sessionId ?? '')}"）。`;
+							try {
+								await ctx.sessionController.prompt(
+									{
+										requestId: randomUUID(),
+										sessionId: target,
+										mode: 'queue',
+										content: [{ type: 'text', text }],
+										clientTimeZone: 'Asia/Shanghai',
+									},
+									new AbortController().signal,
+								);
+								return true;
+							} catch (error) {
+								console.error('[device-fleet] callback wake failed:', error instanceof Error ? error.message : error);
+								return false;
+							}
+						},
 						workspaceRegistry: ctx.workspaceRegistry,
 						sessionController: ctx.sessionController,
 						sessionQuery: ctx.sessionQuery,
@@ -161,6 +195,26 @@ export function apply(ctx, config) {
 					state.tokenSource = resolved.token !== '' ? 'explicit' : generated ? 'generated' : 'explicit';
 					console.log(`[device-fleet] worker listening on ${resolved.host}:${handle.port}`);
 					closeServer = handle.close;
+					// Event-driven completion: the worker only ever reacts to the
+					// Host's own status event, so a controller never has to poll.
+					ctx.effect(() =>
+						ctx.on('agent/status', (payload) => {
+							if (payload?.status !== 'idle') return;
+							const dispatched = getDispatch(String(payload?.agent?.id ?? ''));
+							if (dispatched === undefined) return;
+							fetch(`${dispatched.callbackUrl}/fleet/callback`, {
+								method: 'POST',
+								headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+								body: JSON.stringify({
+									device: deviceName,
+									sessionId: String(payload?.agent?.id ?? ''),
+									controllerSessionId: dispatched.controllerSessionId,
+									at: Date.now(),
+								}),
+								signal: AbortSignal.timeout(8_000),
+							}).catch(() => {});
+						}),
+					);
 					try {
 						const announcer = await startAnnouncing({ port: handle.port, deviceName });
 						closeAnnounce = announcer;
@@ -185,6 +239,7 @@ export function apply(ctx, config) {
 				resolvePeers: async () => Object.entries(await pinnedPeers()).map(([name, peer]) => ({ name, url: peer.url, token: peer.token })),
 				pairPeer: (name, url, token) => pinPeer(name, url, token),
 				pinnedToken: async (name) => (await pinnedPeers())[name]?.token ?? '',
+				controllerPort: resolved.port,
 				controllerName: hostname() || 'dsh-controller',
 			});
 			for (const definition of tools) {
