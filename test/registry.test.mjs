@@ -47,3 +47,13 @@ test('a new dispatch re-arms the wake, a stale repeat stays suppressed', async (
 	// and its own repeat is suppressed again
 	assert.equal(acceptCallbackOnce('session-gen', 600_000, t0 + 402_000), false);
 });
+
+test('a stale shared state object is repaired, not trusted blindly', async () => {
+	// Simulate a process where an older generation created the object first.
+	globalThis.__fleetState = { dispatches: new Map() };
+	const fresh = await import('../lib/registry.js?v=stale-shape');
+	fresh.recordDispatch('session-stale', { controllerSessionId: 'c', callbackUrl: 'http://x' });
+	assert.equal(fresh.getDispatch('session-stale')?.controllerSessionId, 'c', 'dispatches still works');
+	fresh.noteControllerDispatch('session-stale');
+	assert.equal(typeof fresh.acceptCallbackOnce('session-stale'), 'boolean', 'newer keys were filled in');
+});
