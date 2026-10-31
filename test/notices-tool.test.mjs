@@ -5,7 +5,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handlers } from '../lib/controller-impl.js';
+import { handlers, run } from '../lib/controller-impl.js';
+import { appendPendingNotice, takePendingNotices } from '../lib/credentials.js';
 
 const config = { role: 'worker+controller', port: 48791, token: 't', controllerPort: 48791, workers: [], notify: 'panel', exec: { mode: 'off', allow: [] } };
 
@@ -20,4 +21,16 @@ test('a session with nothing parked gets an empty list, not an error', async () 
 	const result = await map.fleet_notices({}, { agentId: 'session-no-notices-0000' });
 	assert.equal(result.count, 0);
 	assert.deepEqual(result.notices, []);
+});
+
+test('run() forwards the calling session, so a parked notice is found', async () => {
+	const id = 'session-notice-plumbing-test';
+	await appendPendingNotice({ controllerSessionId: id, sessionId: 'session-worker-x', device: 'test-worker' });
+	try {
+		const result = await run('fleet_notices', config, {}, { agentId: id });
+		assert.equal(result.count, 1, 'the handler must receive the session id, not undefined');
+		assert.equal(result.notices[0].sessionId, 'session-worker-x');
+	} finally {
+		await takePendingNotices(id);
+	}
 });
