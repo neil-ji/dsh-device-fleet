@@ -26,7 +26,7 @@ import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
-import { getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
+import { clearNotified, getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
 import { askHuman } from './lib/ask-tool.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
@@ -277,6 +277,10 @@ export function apply(ctx, config) {
 							const id = String(sessionId);
 							const dispatched = getDispatch(id);
 							if (dispatched === undefined || wasNotified(id)) return;
+							// Mark BEFORE sending: two idle transitions can land within the
+							// same tick, and both used to pass the check while the first
+							// callback was still in flight (observed as duplicate wakes).
+							markNotified(id);
 							fetch(`${dispatched.callbackUrl}/fleet/callback`, {
 								method: 'POST',
 								headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -296,7 +300,7 @@ export function apply(ctx, config) {
 									} catch {
 										body = { raw: text.slice(0, 200) };
 									}
-									if (response.ok && body?.woke === true) markNotified(id);
+									if (!(response.ok && body?.woke === true)) clearNotified(id);
 									noteCallback({
 										sessionId: id,
 										ok: response.ok,
@@ -305,6 +309,7 @@ export function apply(ctx, config) {
 									});
 								})
 								.catch((error) => {
+									clearNotified(id);
 									noteCallback({ sessionId: id, ok: false, error: error instanceof Error ? error.message : String(error) });
 								});
 						}),
