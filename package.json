@@ -23,17 +23,14 @@
   "files": [
     "index.js",
     "client.js",
-    "lib/server.js",
-    "lib/client.js",
-    "lib/tools.js",
-    "lib/credentials.js",
-    "lib/discovery.js",
-    "lib/panel.js",
+    "lib",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.png",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "assets/miniatures/*.png",
+    "assets/miniatures/prompts.json"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.18.5"

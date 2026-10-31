@@ -5,6 +5,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { shapeFleetView } from '../lib/panel.js';
 import { peekPendingNotices, appendPendingNotice, takePendingNotices } from '../lib/credentials.js';
 
@@ -42,16 +45,19 @@ test('an entry without a device name still renders', () => {
 
 test('the panel shows pending notices without consuming them', async () => {
 	const controllerSessionId = 'session-panel-peek-test';
-	await appendPendingNotice({ controllerSessionId, sessionId: 'session-worker-one', device: 'PC' });
+	const dir = await mkdtemp(join(tmpdir(), 'fleet-panel-peek-'));
+	const store = join(dir, 'device-fleet.json');
 	try {
-		const peeked = await peekPendingNotices();
+		await appendPendingNotice({ controllerSessionId, sessionId: 'session-worker-one', device: 'PC' }, store);
+		const peeked = await peekPendingNotices(store);
 		assert.ok(peeked.some((notice) => notice.controllerSessionId === controllerSessionId), 'panel sees the notice');
-		const stillThere = await peekPendingNotices();
+		const stillThere = await peekPendingNotices(store);
 		assert.ok(stillThere.some((notice) => notice.controllerSessionId === controllerSessionId), 'peeking does not consume');
-		const taken = await takePendingNotices(controllerSessionId);
+		const taken = await takePendingNotices(controllerSessionId, store);
 		assert.equal(taken.length, 1, 'the agent still receives it once');
 	} finally {
-		await takePendingNotices(controllerSessionId);
+		await takePendingNotices(controllerSessionId, store);
+		await rm(dir, { recursive: true, force: true });
 	}
 });
 
@@ -61,4 +67,62 @@ test('the controller journal lists what this machine dispatched', async () => {
 	noteControllerDispatch('session-journal-2', 'Mac', 6_000);
 	const tasks = listControllerTasks().filter((task) => task.sessionId.startsWith('session-journal-'));
 	assert.deepEqual(tasks.map((task) => [task.device, task.at]), [['Hansomeneil', 5_000], ['Mac', 6_000]]);
+});
+
+test('a notice from an earlier dispatch or another device does not complete new work', () => {
+	const entry = { sessionId: 'reused', device: 'PC-1', at: 2000 };
+	for (const notice of [
+		{ sessionId: 'reused', device: 'PC-1', at: 1000 },
+		{ sessionId: 'reused', device: 'PC-2', at: 3000 },
+	]) {
+		const view = shapeFleetView({ now: 4000, dispatches: [entry], notices: [notice] });
+		assert.equal(view.tasks[0].status, 'running');
+	}
+});
+
+test('device-scoped merging preserves journal epoch and gets real session titles', async () => {
+	const { mergeFleetEntries } = await import('../lib/panel.js');
+	const merged = mergeFleetEntries(
+		[{ sessionId: 'same', device: 'PC-1', at: 2000, notified: false }],
+		[
+			{ name: 'PC-1', entries: [{ sessionId: 'same', at: 1000, notified: true }], sessions: [{ sessionId: 'same', title: 'Build report' }] },
+			{ name: 'PC-2', entries: [{ sessionId: 'same', at: 900, notified: true }], sessions: [] },
+		],
+	);
+	assert.equal(merged.length, 2);
+	assert.equal(merged[0].title, 'Build report');
+	assert.equal(merged[0].at, 2000);
+	assert.equal(merged[0].notified, false, 'old remote completion cannot complete a newer controller dispatch');
+	assert.equal(merged[1].device, 'PC-2');
+});
+
+test('consuming notices does not regress a controller task to waiting', async () => {
+	const { noteControllerDispatch, acceptCallbackOnce, listControllerTasks } = await import('../lib/registry.js');
+	const id = 'session-ui-durable-completion';
+	noteControllerDispatch(id, 'PC', 1000);
+	acceptCallbackOnce(id, 600000, 2000);
+	globalThis.__fleetState.lastAccepted.delete(id); // dedupe cache pruning must not erase task history
+	let task = listControllerTasks().find((entry) => entry.sessionId === id);
+	assert.equal(shapeFleetView({ now: 3000, dispatches: [task], notices: [] }).tasks[0].status, 'done');
+	noteControllerDispatch(id, 'PC', 4000);
+	task = listControllerTasks().find((entry) => entry.sessionId === id);
+	assert.equal(shapeFleetView({ now: 5000, dispatches: [task], notices: [] }).tasks[0].status, 'running');
+});
+
+test('legacy journals recover device identity only from an unambiguous worker record', async () => {
+	const { mergeFleetEntries } = await import('../lib/panel.js');
+	const journal = [{ sessionId: 'legacy', device: '', at: 2000, notified: true }];
+	const remote = {
+		name: 'PC-1',
+		entries: [{ sessionId: 'legacy', at: 1000, notified: false }],
+		sessions: [{ sessionId: 'legacy', title: 'Existing task' }],
+	};
+	const merged = mergeFleetEntries(journal, [remote]);
+	assert.equal(merged.length, 1);
+	assert.equal(merged[0].device, 'PC-1');
+	assert.equal(merged[0].title, 'Existing task');
+	assert.equal(merged[0].notified, true);
+	const ambiguous = mergeFleetEntries(journal, [remote, { ...remote, name: 'PC-2' }]);
+	assert.equal(ambiguous.length, 3);
+	assert.equal(ambiguous[0].device, '未知设备');
 });
