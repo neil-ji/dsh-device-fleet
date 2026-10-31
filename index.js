@@ -28,7 +28,7 @@ import { createToolDefinitions } from './lib/tools.js';
 import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
 import { clearNotified, getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
 import { askHuman } from './lib/ask-tool.js';
-import { checkCwd, planExec } from './lib/exec-guard.js';
+import { checkCwd, checkEnv, planExec } from './lib/exec-guard.js';
 import { appendAudit, runExec } from './lib/exec-run.js';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -241,8 +241,17 @@ export function apply(ctx, config) {
 								await audit({ status: 'denied', reason: cwdVerdict.reason });
 								return { status: 'denied', reason: cwdVerdict.reason };
 							}
+							const envVerdict = checkEnv(body?.env);
+							if (!envVerdict.ok) {
+								await audit({ status: 'denied', reason: envVerdict.reason });
+								return { status: 'denied', reason: envVerdict.reason };
+							}
 							const timeoutMs = Math.min(Math.max(Number(body?.timeoutMs) || 120_000, 1_000), 600_000);
-							const result = await runExec(plan.argv, { cwd: requestedCwd, timeoutMs });
+							const result = await runExec(plan.argv, {
+								cwd: requestedCwd,
+								timeoutMs,
+								env: { ...process.env, ...envVerdict.env },
+							});
 							await audit({ status: result.status, exitCode: result.exitCode, durationMs: result.durationMs, truncated: result.truncated });
 							return result;
 						},

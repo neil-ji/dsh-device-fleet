@@ -60,3 +60,12 @@ test('cwd stays inside the plugin directory in allowlist mode', () => {
 	assert.equal(checkCwd('/etc', dir, 'allowlist').ok, false);
 	assert.equal(checkCwd('/etc', dir, 'any').ok, true);
 });
+
+test('env overrides are limited to proxy keys and string values', async () => {
+	const { checkEnv } = await import('../lib/exec-guard.js');
+	assert.deepEqual(checkEnv({ HTTPS_PROXY: '' }), { ok: true, env: { HTTPS_PROXY: '' } });
+	assert.equal(checkEnv({ LD_PRELOAD: '/tmp/x.so' }).ok, false);
+	assert.equal(checkEnv({ NODE_OPTIONS: '--require /tmp/x.js' }).ok, false);
+	assert.equal(checkEnv({ HTTPS_PROXY: 5 }).ok, false);
+	assert.deepEqual(checkEnv(undefined), { ok: true, env: {} });
+});
