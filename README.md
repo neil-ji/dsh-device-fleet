@@ -154,6 +154,13 @@ worker 侧 agent 在需要人拍板时调用 **`fleet_ask_human`**（不是 `ask
 
 派发出去的 `prompt` 必须是**自包含**的：对端 agent 看不到本端上下文。实践里效果最好的写法是「目标 + 验收标准 + 输出格式 + 字数上限 + 不允许做什么」，并且要求它**自证**（贴真实命令输出，而不是复述设计）。
 
+## 热更新时代的两个硬约束（都踩过）
+
+1. **共享状态必须挂在 `globalThis`**。`lib/registry.js` 同时被入口 `index.js` 和热加载的 `*-impl.js` 引用；HMR 换掉该模块后，两边会各持一份模块级 `Map`——worker 把派发记录写进 A，工具从 B 读，于是明明是舰队派发的会话却被判成"不是舰队派发"。`globalThis.__fleetState` 是唯一可靠的中转点，`test/registry.test.mjs` 用两个模块实例覆盖了这条。
+2. **改了共享模块之后，还要让实现模块换代**。我们的热加载只按 `lib/*-impl.js` 的 mtime 换代；如果只改了 `registry.js`，已经加载的 impl 仍握着旧实例（新代码要等下一世代才生效）。改共享模块后顺手 `touch lib/worker-impl.js`（或等自然重启）再验证，否则会误判"修复没生效"。
+
+另外：`/fleet/hello` 的 `commit` 字段来自 `version.js` 的 `git rev-parse`，它**不随 HMR 重新求值**，所以**不能**用来判断壳有没有重载。可靠判据是给 `lib/server.js` 加一个响应头探针，看新代码是否出现在响应里。
+
 ## 已知限制
 
 - **首次调用**：Host 每次重启后缓存为空，旧版会报 `unknown worker`；现已自动扫一次（`discovered after a fresh scan: ...`），但若 LAN 上确实没人应答，仍会明确失败。
