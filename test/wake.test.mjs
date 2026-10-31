@@ -42,3 +42,11 @@ test('a missing agent or transport reports why instead of throwing', () => {
 	const boom = { inject() { throw new Error('nope'); }, wakeDriver() {} };
 	assert.deepEqual(wakeSilently(boom), { woke: false, reason: 'nope' });
 });
+
+test('a session with nothing parked is never woken on arrival', async () => {
+	const { shouldWakeOnArrival } = await import('../lib/wake.js');
+	assert.equal(shouldWakeOnArrival({ wake: 'silent', hasNotices: false }), false, 'this is the self-introduction bug');
+	assert.equal(shouldWakeOnArrival({ wake: 'thread', hasNotices: false }), false);
+	assert.equal(shouldWakeOnArrival({ wake: 'silent', hasNotices: true }), true);
+	assert.equal(shouldWakeOnArrival({ wake: 'off', hasNotices: true }), false);
+});

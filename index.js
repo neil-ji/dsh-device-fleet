@@ -25,10 +25,10 @@ import { homedir, hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
-import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
+import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, peekPendingNotices, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
 import { acceptCallbackOnce, clearNotified, getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
 import { askHuman } from './lib/ask-tool.js';
-import { planWake, wakeSilently } from './lib/wake.js';
+import { planWake, shouldWakeOnArrival, wakeSilently } from './lib/wake.js';
 import { checkCwd, checkEnv, planExec } from './lib/exec-guard.js';
 import { appendAudit, runExec } from './lib/exec-run.js';
 import { dirname, resolve } from 'node:path';
@@ -492,14 +492,18 @@ export function apply(ctx, config) {
 				ctx.on('api-session/added', (summary) => {
 					const sessionId = String(summary?.sessionId ?? '');
 					if (sessionId === '') return;
-					takePendingNotices(sessionId)
-						.then(async (notices) => {
-							if (resolved.wake === 'off') return;
-							if (resolved.wake === 'silent') {
-								const revived = ctx.agents.get(sessionId);
-								if (revived !== undefined) wakeSilently(revived);
-								return;
-							}
+					void (async () => {
+						// Only a session with something to read may be woken; otherwise the
+						// agent gets an empty turn and starts talking to nobody.
+						const parked = (await peekPendingNotices()).filter((notice) => notice.controllerSessionId === sessionId);
+						if (!shouldWakeOnArrival({ wake: resolved.wake, hasNotices: parked.length > 0 })) return;
+						if (resolved.wake === 'silent') {
+							const revived = ctx.agents.get(sessionId);
+							if (revived !== undefined) wakeSilently(revived);
+							return;
+						}
+						const notices = await takePendingNotices(sessionId);
+						{
 							for (const notice of notices) {
 								try {
 									await ctx.sessionController.prompt(
@@ -519,8 +523,8 @@ export function apply(ctx, config) {
 									);
 								} catch {}
 							}
-						})
-						.catch(() => {});
+						}
+					})().catch(() => {});
 				}),
 			);
 			const tools = createToolDefinitions({
