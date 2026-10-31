@@ -25,7 +25,7 @@ import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
-import { ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers } from './lib/credentials.js';
+import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
 import { getDispatch, markNotified, noteCallback, wasNotified } from './lib/registry.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
@@ -155,7 +155,16 @@ export function apply(ctx, config) {
 							const target = String(body?.controllerSessionId ?? '');
 							if (target === '') return false;
 							const agent = ctx.agents.get(target);
-							if (agent === undefined) return false;
+							if (agent === undefined) {
+								// The controller window is closed: keep the notice and
+								// deliver it when that session comes back.
+								await appendPendingNotice({
+									controllerSessionId: target,
+									sessionId: String(body?.sessionId ?? ''),
+									device: String(body?.device ?? 'worker'),
+								}).catch(() => {});
+								return false;
+							}
 							const text =
 								`[设备舰队] ${String(body?.device ?? 'worker')} 上的会话 ${String(body?.sessionId ?? '')} 已空闲。` +
 								`用 fleet_recent 读取结论（worker="${String(body?.device ?? '')}", sessionId="${String(body?.sessionId ?? '')}"）。`;
@@ -255,6 +264,37 @@ export function apply(ctx, config) {
 		}
 
 		if (role.includes('controller')) {
+			// A session can appear again after its window was closed; parked
+			// completion notices are delivered then instead of being lost.
+			ctx.effect(() =>
+				ctx.on('api-session/added', (summary) => {
+					const sessionId = String(summary?.sessionId ?? '');
+					if (sessionId === '') return;
+					takePendingNotices(sessionId)
+						.then(async (notices) => {
+							for (const notice of notices) {
+								try {
+									await ctx.sessionController.prompt(
+										{
+											requestId: randomUUID(),
+											sessionId,
+											mode: 'queue',
+											content: [
+												{
+													type: 'text',
+													text: `[设备舰队] ${notice.device} 上的会话 ${notice.sessionId} 已空闲（此通知在你不在时到达）。用 fleet_recent 读取结论（worker="${notice.device}", sessionId="${notice.sessionId}"）。`,
+												},
+											],
+											clientTimeZone: 'Asia/Shanghai',
+										},
+										new AbortController().signal,
+									);
+								} catch {}
+							}
+						})
+						.catch(() => {});
+				}),
+			);
 			const tools = createToolDefinitions({
 				workers: resolved.workers,
 				discovered,
