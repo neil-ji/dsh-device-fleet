@@ -26,7 +26,7 @@ import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
-import { clearNotified, getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
+import { acceptCallbackOnce, clearNotified, getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
 import { askHuman } from './lib/ask-tool.js';
 import { checkCwd, checkEnv, planExec } from './lib/exec-guard.js';
 import { appendAudit, runExec } from './lib/exec-run.js';
@@ -276,6 +276,11 @@ export function apply(ctx, config) {
 						onCallback: async (body) => {
 							const target = String(body?.controllerSessionId ?? '');
 							if (target === '') return false;
+							// Receiver-side idempotency: a worker can legitimately report
+							// the same completion twice (re-dispatch resets its mark, and
+							// a session can idle at several boundaries). Waking twice adds
+							// only noise, so suppress repeats within the window.
+							if (!acceptCallbackOnce(String(body?.sessionId ?? ''))) return false;
 							const agent = ctx.agents.get(target);
 							if (agent === undefined) {
 								// The controller window is closed: keep the notice and

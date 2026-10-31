@@ -24,3 +24,13 @@ test('two module instances share the same dispatch state', async () => {
 	second.clearNotified('session-split');
 	assert.equal(first.wasNotified('session-split'), false);
 });
+
+test('completion callbacks are idempotent at the receiver', async () => {
+	const { acceptCallbackOnce } = await import('../lib/registry.js');
+	const t0 = 1_000_000;
+	assert.equal(acceptCallbackOnce('session-dedupe', 120_000, t0), true, 'first callback accepted');
+	assert.equal(acceptCallbackOnce('session-dedupe', 120_000, t0 + 1_000), false, 'immediate repeat suppressed');
+	assert.equal(acceptCallbackOnce('session-dedupe', 120_000, t0 + 119_000), false, 'still inside the window');
+	assert.equal(acceptCallbackOnce('session-dedupe', 120_000, t0 + 121_000), true, 'a later completion is delivered again');
+	assert.equal(acceptCallbackOnce('another-session', 120_000, t0 + 2_000), true, 'other sessions are unaffected');
+});
