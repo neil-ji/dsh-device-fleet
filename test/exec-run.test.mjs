@@ -24,8 +24,10 @@ test('a non-zero exit is reported, not thrown', async () => {
 });
 
 test('a hanging command is killed at the timeout', async () => {
+	// Platform-neutral: `sleep` is absent on Windows, and this suite now runs on
+	// both machines through fleet_exec.
 	const started = Date.now();
-	const result = await runExec(['sleep', '5'], { cwd: tmpdir(), timeoutMs: 400 });
+	const result = await runExec(['node', '-e', 'setTimeout(() => {}, 5000)'], { cwd: tmpdir(), timeoutMs: 400 });
 	assert.equal(result.status, 'timeout');
 	assert.ok(Date.now() - started < 3_000, 'killed promptly rather than waiting for the process');
 });
