@@ -131,6 +131,14 @@ fleet_recent           { worker, sessionId }     # 读回结论（单条上限 1
 fleet_stop             { worker, sessionId }     # 跑偏时停掉，会话保留可续
 ```
 
+### 任务完成是"推"给你的，不是你去问的
+
+派发之后不需要轮询：worker 记住"这个会话是谁派的"，当 Host 发布该会话的空闲状态时，worker 主动 POST 到派发方的 `/fleet/callback`，controller 再用公开的 `sessionController.prompt()` 唤醒发起会话——于是你在对话里直接收到一条 `[设备舰队] … 已空闲`，照着里面的 sessionId 读结论即可。
+
+- 鉴权方向：worker 永远不知道 controller 监听器的 token，所以回调**用 worker 自己的 token**，controller 拿配对时 pin 下的 peer token 比对；
+- **每次派发只通知一次**（一个任务可能跨多轮空闲），重新派发才会重置；
+- `GET /fleet/dispatches`（只读）列出已登记的回调目标与最近一次回调结果（含 HTTP 状态与错误体）——跨机静默失败靠它定位。
+
 `fleet_dispatch` 支持 `wait: true`（可配 `waitTimeoutMs`，默认 5 分钟）：派发后阻塞到对端会话空闲，直接带回 `transcript`，省掉手写轮询。`fleet_recent` 支持 `finalOnly: true`：只要最后一条 assistant 结论，跳过过程中的推理消息。
 
 派发出去的 `prompt` 必须是**自包含**的：对端 agent 看不到本端上下文。实践里效果最好的写法是「目标 + 验收标准 + 输出格式 + 字数上限 + 不允许做什么」，并且要求它**自证**（贴真实命令输出，而不是复述设计）。
