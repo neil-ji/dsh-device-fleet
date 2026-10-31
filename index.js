@@ -199,8 +199,14 @@ export function apply(ctx, config) {
 							const questions = Array.isArray(body?.questions) ? body.questions : [];
 							if (questions.length === 0) return null;
 							if (typeof ctx.userQuestions?.ask !== 'function') return null;
+							// The card must be owned by an Agent: a plugin-side ask without
+							// one left the platform with nowhere to record the outcome, and
+							// answering it restarted the Host. Use the session that
+							// dispatched the task; without it, refuse instead of asking.
+							const owner = ctx.agents.get(String(body?.controllerSessionId ?? ''));
+							if (owner === undefined) return null;
 							try {
-								const answer = await ctx.userQuestions.ask({ questions });
+								const answer = await ctx.userQuestions.ask({ questions, agent: owner });
 								return answer ?? null;
 							} catch (error) {
 								console.error('[device-fleet] forward ask failed:', error instanceof Error ? error.message : error);

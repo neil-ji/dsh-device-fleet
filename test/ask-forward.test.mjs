@@ -57,3 +57,13 @@ test('does nothing without a callback target, token, or questions', async () => 
 	assert.equal(await forwardQuestion({ callbackUrl: 'http://x', token: 't', request: {}, fetchImpl }), null);
 	assert.equal(fetchImpl.calls.length, 0, 'no request is attempted when forwarding cannot work');
 });
+
+test('the card owner travels with the question only when known', async () => {
+	const withOwner = fakeFetch(() => ({ ok: true, async json() { return answer; } }));
+	await forwardQuestion({ callbackUrl: 'http://x', token: 't', request, controllerSessionId: 'session-abc', fetchImpl: withOwner });
+	assert.equal(JSON.parse(withOwner.calls[0].init.body).controllerSessionId, 'session-abc');
+
+	const withoutOwner = fakeFetch(() => ({ ok: true, async json() { return answer; } }));
+	await forwardQuestion({ callbackUrl: 'http://x', token: 't', request, fetchImpl: withoutOwner });
+	assert.equal('controllerSessionId' in JSON.parse(withoutOwner.calls[0].init.body), false);
+});
