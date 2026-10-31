@@ -57,6 +57,20 @@ window.__ModuleLoader__.load({
 .fleet-item-url{color:var(--dsw-alias-label-tertiary);word-break:break-all}
 .fleet-tag{font-size:11px;padding:1px 7px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary)}
 .fleet-empty{margin:0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-tertiary)}
+.fleet-tasks{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.fleet-task{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 4px;border-radius:8px;font-size:13px;line-height:20px}
+.fleet-task:hover{background:var(--dsw-alias-bg-l2)}
+.fleet-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.fleet-dot.is-running{background:var(--dsw-alias-state-business-primary)}
+.fleet-dot.is-done{background:var(--dsw-alias-state-success-primary)}
+.fleet-dot.is-stale{background:var(--dsw-alias-state-warning-primary,var(--dsw-alias-state-business-primary));opacity:.6}
+.fleet-task-main{display:flex;align-items:baseline;gap:8px;min-width:0}
+.fleet-task-device{font-weight:600;white-space:nowrap}
+.fleet-task-id{font-family:var(--dsw-font-mono,ui-monospace,monospace);font-size:12px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fleet-task-meta{display:flex;align-items:baseline;gap:8px;flex:0 0 auto}
+.fleet-pill{font-size:11px;line-height:18px;padding:0 8px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+.fleet-age{font-size:12px;color:var(--dsw-alias-label-tertiary);min-width:64px;text-align:right}
+.fleet-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--dsw-alias-state-business-primary);color:#fff;font-size:11px;font-weight:600}
 `
 
 		/** 页面令牌：宿主渲染 index.html 时注入；拿不到就只走回环 + 同源校验。 */
@@ -94,6 +108,26 @@ window.__ModuleLoader__.load({
 		}
 
 		/** 一行状态卡。 */
+		const TASK_STATUS = {
+			running: { label: '运行中', dot: 'is-running' },
+			done: { label: '已完成', dot: 'is-done' },
+			stale: { label: '久未响应', dot: 'is-stale' },
+		}
+
+		/**
+		 * Human-friendly age. Raw milliseconds are unreadable at a glance, and the
+		 * exact timestamp is still shown on hover via the title attribute.
+		 * @param {number} ms Age in milliseconds.
+		 * @returns {string} Relative label.
+		 */
+		function relativeAge(ms) {
+			if (!Number.isFinite(ms) || ms < 0) return '—'
+			if (ms < 60_000) return '刚刚'
+			if (ms < 3_600_000) return `${Math.floor(ms / 60_000)} 分钟前`
+			if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)} 小时前`
+			return `${Math.floor(ms / 86_400_000)} 天前`
+		}
+
 		function Card(props) {
 			return h(
 				'div',
@@ -177,6 +211,8 @@ window.__ModuleLoader__.load({
 				data?.tokenSource === 'explicit' ? '显式配置的共享密钥' : data?.tokenSource === 'generated' ? '首次激活自动生成' : '未就绪'
 			const discovered = data?.discovered ?? []
 			const workers = data?.workers ?? []
+			const view = data?.view ?? { tasks: [], noticeCount: 0, recentNotices: [] }
+			const tasks = view.tasks ?? []
 
 			return h(
 				'div',
@@ -196,8 +232,56 @@ window.__ModuleLoader__.load({
 					'div',
 					{ className: 'fleet-cards' },
 					h(Card, { label: '角色', value: data?.role ?? '—' }),
-					h(Card, { label: '监听', value: listening ? `${data?.host}:${data?.port}` : '未启动', hint: listening ? `本机地址 ${data?.lan}` : 'worker 半端没有运行' }),
+					h(Card, {
+						label: '监听',
+						value: listening ? `${data?.host}:${data?.port}` : '未启动',
+						hint: listening
+							? `本机地址 ${data?.lan} · ${(data?.workersOnline ?? []).filter((worker) => worker.online).length}/${(data?.workersOnline ?? []).length || 1} 台在线`
+							: 'worker 半端没有运行',
+					}),
 					h(Card, { label: '密钥', value: data?.tokenSet ? '已就绪' : '未就绪', hint: keyHint }),
+				),
+				h(
+					'div',
+					{ className: 'fleet-panel' },
+					h(
+						'div',
+						{ className: 'fleet-panel-head' },
+						h('h3', { className: 'fleet-panel-title' }, '任务'),
+						view.noticeCount > 0
+							? h('span', { className: 'fleet-badge', role: 'status', 'aria-atomic': 'true' }, String(view.noticeCount))
+							: null,
+						h(
+							'span',
+							{ className: 'fleet-note' },
+							view.noticeCount > 0 ? `${view.noticeCount} 个任务已完成，等待 Agent 读取` : '派给其它机器的任务会出现在这里',
+						),
+					),
+					tasks.length === 0
+						? h('p', { className: 'fleet-empty' }, '还没有派发过任务。让 Agent 用 fleet_dispatch 把工作交给另一台机器。')
+						: h(
+								'ul',
+								{ className: 'fleet-tasks' },
+								tasks.map((task) =>
+									h(
+										'li',
+										{ className: 'fleet-task', key: task.sessionId },
+										h('span', { className: `fleet-dot ${(TASK_STATUS[task.status] || TASK_STATUS.running).dot}`, 'aria-hidden': 'true' }),
+										h(
+											'div',
+											{ className: 'fleet-task-main' },
+											h('span', { className: 'fleet-task-device' }, task.device),
+											h('span', { className: 'fleet-task-id', title: task.sessionId }, task.shortId),
+										),
+										h(
+											'div',
+											{ className: 'fleet-task-meta' },
+											h('span', { className: 'fleet-pill' }, (TASK_STATUS[task.status] || TASK_STATUS.running).label),
+											h('span', { className: 'fleet-age', title: new Date(task.at).toLocaleString() }, relativeAge(task.ageMs)),
+										),
+									),
+								),
+							),
 				),
 				h(
 					'div',

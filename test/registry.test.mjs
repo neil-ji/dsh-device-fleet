@@ -42,7 +42,7 @@ test('a new dispatch re-arms the wake, a stale repeat stays suppressed', async (
 	// same completion reported again, no new dispatch: suppressed for the window
 	assert.equal(acceptCallbackOnce('session-gen', 600_000, t0 + 300_000), false);
 	// controller dispatches new work, so the next completion must be delivered
-	noteControllerDispatch('session-gen', t0 + 400_000);
+	noteControllerDispatch('session-gen', 'test-worker', t0 + 400_000);
 	assert.equal(acceptCallbackOnce('session-gen', 600_000, t0 + 401_000), true);
 	// and its own repeat is suppressed again
 	assert.equal(acceptCallbackOnce('session-gen', 600_000, t0 + 402_000), false);
@@ -54,6 +54,6 @@ test('a stale shared state object is repaired, not trusted blindly', async () =>
 	const fresh = await import('../lib/registry.js?v=stale-shape');
 	fresh.recordDispatch('session-stale', { controllerSessionId: 'c', callbackUrl: 'http://x' });
 	assert.equal(fresh.getDispatch('session-stale')?.controllerSessionId, 'c', 'dispatches still works');
-	fresh.noteControllerDispatch('session-stale');
+	fresh.noteControllerDispatch('session-stale', 'test-worker');
 	assert.equal(typeof fresh.acceptCallbackOnce('session-stale'), 'boolean', 'newer keys were filled in');
 });
