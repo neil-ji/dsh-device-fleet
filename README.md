@@ -131,6 +131,17 @@ fleet_recent           { worker, sessionId }     # 读回结论（单条上限 1
 fleet_stop             { worker, sessionId }     # 跑偏时停掉，会话保留可续
 ```
 
+### 委派出去的任务可以反过来问你问题
+
+worker 侧 agent 在需要人拍板时调用 **`fleet_ask_human`**（不是 `ask_user_question`）：问题经同一通道转发到发起任务的会话，controller 用 `ctx.userQuestions.ask({ questions, agent })` 在你这边弹卡片，你作答后答案原路回到 worker，agent 继续。
+
+设计要点：
+
+- **卡片必须挂在发起会话的 agent 上**。插件上下文直接 ask 会得到一张"无主"卡片，平台无处记录结果（实测：作答时 Host 重启）。
+- 发起会话不在线时**拒绝提问**，而不是造一张没人认领的卡片。
+- worker 拿不到回答时返回 `unavailable` 并明确要求"不要猜"，由模型决定停下还是稍后重试。
+- 为什么不拦截平台自带的 `ask_user_question`：`user-questions/request` 走 Agent 作用域 waterfall，插件在 `agent.ctx` 上注册的监听器实测**不会触发**。
+
 ### 任务完成是"推"给你的，不是你去问的
 
 派发之后不需要轮询：worker 记住"这个会话是谁派的"，当 Host 发布该会话的空闲状态时，worker 主动 POST 到派发方的 `/fleet/callback`，controller 再用公开的 `sessionController.prompt()` 唤醒发起会话——于是你在对话里直接收到一条 `[设备舰队] … 已空闲`，照着里面的 sessionId 读结论即可。
