@@ -26,12 +26,13 @@ import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
-import { getDispatch, markNotified, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
+import { getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
+import { askHuman } from './lib/ask-tool.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
 /** @type {string[]} Services this plugin needs from the Host composition. */
-export const inject = ['tools', 'agents', 'workspaceRegistry', 'sessionController', 'sessionQuery', 'webServer'];
+export const inject = ['tools', 'agents', 'userQuestions', 'workspaceRegistry', 'sessionController', 'sessionQuery', 'webServer'];
 
 /** Auto-discovered workers, shared across tool calls and populated by fleet_list_workers. */
 const discovered = new Map();
@@ -116,16 +117,39 @@ export function apply(ctx, config) {
 		// them: the worker half arms a session right after recording a dispatch,
 		// and the global session feed covers sessions created later.
 		const armedSessions = new Set();
+		/** Filled once the worker listener is up; ask forwarding needs it. */
+		let workerToken = '';
 		const armSession = async (sessionId) => {
 			const id = String(sessionId);
 			if (id === '' || armedSessions.has(id)) return false;
 			const agent = ctx.agents.get(id);
-			if (agent === undefined || agent.ctx === undefined) return false;
+			if (agent === undefined) {
+				noteArm({ sessionId: id, armed: false, reason: 'agent-not-live' });
+				return false;
+			}
+			if (agent.ctx === undefined) {
+				noteArm({ sessionId: id, armed: false, reason: `agent-ctx-missing:${Object.keys(agent).slice(0, 8).join(',')}` });
+				return false;
+			}
 			agent.ctx.on('user-questions/request', async (request, next) => {
 				noteQuestionProbe(request);
+				const dispatched = getDispatch(id);
+				if (dispatched !== undefined) {
+					const forwarded = await forwardQuestion({
+						callbackUrl: dispatched.callbackUrl,
+						token: workerToken,
+						request,
+					});
+					noteAsk({ sessionId: id, forwarded: true, answered: forwarded !== null });
+					if (forwarded !== null) return forwarded;
+					noteAsk({ sessionId: id, forwarded: false, answered: false });
+				}
+				// Nobody answered from the controller: keep the local card, which is
+				// exactly what happens without this plugin.
 				return next();
 			});
 			armedSessions.add(id);
+			noteArm({ sessionId: id, armed: true, reason: 'armed' });
 			return true;
 		};
 		/** What the page shows; `apply` keeps it in step with the listener. */
@@ -157,6 +181,7 @@ export function apply(ctx, config) {
 				const running = (async () => {
 					const generated = resolved.token === '';
 					const token = await resolveToken();
+					workerToken = token;
 					const handle = await startWorkerServer({
 						host: resolved.host,
 						port: resolved.port,
@@ -170,6 +195,18 @@ export function apply(ctx, config) {
 							return Object.values(peers).some((peer) => `Bearer ${peer.token}` === presented);
 						},
 						armSession,
+						onAsk: async (body) => {
+							const questions = Array.isArray(body?.questions) ? body.questions : [];
+							if (questions.length === 0) return null;
+							if (typeof ctx.userQuestions?.ask !== 'function') return null;
+							try {
+								const answer = await ctx.userQuestions.ask({ questions });
+								return answer ?? null;
+							} catch (error) {
+								console.error('[device-fleet] forward ask failed:', error instanceof Error ? error.message : error);
+								return null;
+							}
+						},
 						onCallback: async (body) => {
 							const target = String(body?.controllerSessionId ?? '');
 							if (target === '') return false;
@@ -264,6 +301,73 @@ export function apply(ctx, config) {
 								.catch((error) => {
 									noteCallback({ sessionId: id, ok: false, error: error instanceof Error ? error.message : String(error) });
 								});
+						}),
+					);
+					// A delegated agent needs one explicit way to reach this machine's
+					// human. Intercepting the platform's own question waterfall is not
+					// reliable from a plugin (Agent-scoped, measured), so the fleet
+					// offers its own tool instead.
+					ctx.effect(() =>
+						ctx.tools.register({
+							name: 'fleet_ask_human',
+							description:
+								'Ask the person on the controller machine one question when their decision is required, and block until they answer. ' +
+								'Use this instead of ask_user_question inside a session that was started by a fleet dispatch: the controller forwards it to the person who dispatched the task.',
+							parameters: {
+								type: 'object',
+								additionalProperties: false,
+								properties: {
+									question: { type: 'string', description: 'The question, in one or two sentences.' },
+									options: {
+										type: 'array',
+										description: 'Optional choices; omit for a free-form answer.',
+										items: {
+											type: 'object',
+											additionalProperties: false,
+											properties: { label: { type: 'string' }, description: { type: 'string' } },
+											required: ['label'],
+										},
+									},
+								},
+								required: ['question'],
+							},
+							output: {
+								schema: {
+									type: 'object',
+									additionalProperties: false,
+									properties: {
+										status: { type: 'string', enum: ['answered', 'unavailable'] },
+										answers: {
+											type: 'array',
+											items: {
+												type: 'object',
+												additionalProperties: false,
+												properties: {
+													id: { type: 'string' },
+													selected: { type: 'array', items: { type: 'string' } },
+													custom: { type: 'string' },
+												},
+												required: ['id', 'selected'],
+											},
+										},
+										message: { type: 'string' },
+									},
+									required: ['status', 'message'],
+								},
+								render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+							},
+							isConcurrencySafe: () => false,
+							async execute(args, exec) {
+								const sessionId = String(exec?.agent?.id ?? '');
+								return askHuman({
+									dispatch: sessionId === '' ? undefined : getDispatch(sessionId),
+									token: workerToken,
+									question: {
+										question: String(args?.question ?? ''),
+										...(Array.isArray(args?.options) ? { options: args.options } : {}),
+									},
+								});
+							},
 						}),
 					);
 					try {

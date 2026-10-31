@@ -265,3 +265,59 @@ test('TOFU: hello discloses token until claimed, then stops', async () => {
 		await server.close();
 	}
 });
+
+test('fleet/ask: peer token may ask; the controller answer is relayed back', async () => {
+	const server = await startWorkerServer({
+		host: '127.0.0.1',
+		port: 0,
+		token: 'own-token',
+		deviceName: 'test-controller',
+		workspaceRegistry: fakeWorkspaces(),
+		sessionController: fakeSessions(),
+		verifyPeerToken: async (presented) => presented === 'Bearer peer-token',
+		onAsk: async (body) => ({ answers: (body.questions ?? []).map((q) => ({ id: q.id, selected: ['要'] })) }),
+	});
+	const base = `http://127.0.0.1:${server.port}`;
+	try {
+		const question = { questions: [{ id: 'q1', question: '要继续吗？', options: [{ label: '要' }, { label: '不要' }] }] };
+		const ok = await fetch(`${base}/fleet/ask`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer peer-token', 'content-type': 'application/json' },
+			body: JSON.stringify(question),
+		});
+		assert.equal(ok.status, 200);
+		assert.deepEqual(await ok.json(), { answers: [{ id: 'q1', selected: ['要'] }] });
+
+		const wrongToken = await fetch(`${base}/fleet/ask`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer stranger', 'content-type': 'application/json' },
+			body: JSON.stringify(question),
+		});
+		assert.equal(wrongToken.status, 401);
+	} finally {
+		await server.close();
+	}
+});
+
+test('fleet/ask: a Host that cannot answer reports 503 instead of hanging', async () => {
+	const server = await startWorkerServer({
+		host: '127.0.0.1',
+		port: 0,
+		token: 'own-token',
+		deviceName: 'test-controller',
+		workspaceRegistry: fakeWorkspaces(),
+		sessionController: fakeSessions(),
+		verifyPeerToken: async () => true,
+		onAsk: async () => null,
+	});
+	try {
+		const response = await fetch(`http://127.0.0.1:${server.port}/fleet/ask`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer peer', 'content-type': 'application/json' },
+			body: JSON.stringify({ questions: [{ id: 'q', question: 'x' }] }),
+		});
+		assert.equal(response.status, 503);
+	} finally {
+		await server.close();
+	}
+});
