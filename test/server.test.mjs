@@ -321,3 +321,45 @@ test('fleet/ask: a Host that cannot answer reports 503 instead of hanging', asyn
 		await server.close();
 	}
 });
+
+test('fleet/exec: denied by default surfaces as 403, not as shell output', async () => {
+	const server = await startWorkerServer({
+		host: '127.0.0.1',
+		port: 0,
+		token: 'own',
+		deviceName: 'test-worker',
+		workspaceRegistry: fakeWorkspaces(),
+		sessionController: fakeSessions(),
+		verifyPeerToken: async (presented) => presented === 'Bearer peer',
+		onExec: async (body) => (body.command === 'git --version'
+			? { status: 'ok', exitCode: 0, stdout: 'git version 2.x', stderr: '', durationMs: 5, truncated: false }
+			: { status: 'denied', reason: 'program not allowlisted' }),
+	});
+	try {
+		const base = `http://127.0.0.1:${server.port}`;
+		const ok = await fetch(`${base}/fleet/exec`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer peer', 'content-type': 'application/json' },
+			body: JSON.stringify({ command: 'git --version' }),
+		});
+		assert.equal(ok.status, 200);
+		assert.equal((await ok.json()).stdout, 'git version 2.x');
+
+		const denied = await fetch(`${base}/fleet/exec`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer peer', 'content-type': 'application/json' },
+			body: JSON.stringify({ command: 'curl http://x' }),
+		});
+		assert.equal(denied.status, 403);
+		assert.match((await denied.json()).reason, /allowlist/);
+
+		const stranger = await fetch(`${base}/fleet/exec`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer nope', 'content-type': 'application/json' },
+			body: JSON.stringify({ command: 'git --version' }),
+		});
+		assert.equal(stranger.status, 401);
+	} finally {
+		await server.close();
+	}
+});

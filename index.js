@@ -21,13 +21,17 @@
  * @module dsh-device-fleet
  */
 
-import { hostname } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
 import { clearNotified, getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
 import { askHuman } from './lib/ask-tool.js';
+import { checkCwd, planExec } from './lib/exec-guard.js';
+import { appendAudit, runExec } from './lib/exec-run.js';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
@@ -60,6 +64,14 @@ try {
 		host: Schema.string().default(DEFAULT_HOST).description('worker 监听地址。'),
 		port: Schema.natural().default(DEFAULT_PORT).description('worker 监听端口。'),
 		token: Schema.string().default('').description('留空则 worker 首次激活时自动生成并持久化，controller 首连自动配对（TOFU）；显式设置时两端必须一致。'),
+		exec: Schema.object({
+			mode: Schema.union(['off', 'allowlist', 'any']).default('off').description('fleet_exec policy: off refuses everything; allowlist permits exec.allow programs inside the plugin directory; any also permits other directories.'),
+			allow: Schema.array(Schema.string())
+				.default(['git', 'node', 'pnpm', 'npm', 'python', 'python3', 'dotnet', 'ffmpeg'])
+				.description('Program names allowed in allowlist mode. Inline code flags (-c/-e/-Command) are always refused.'),
+		})
+			.description('Remote command execution policy for this worker.')
+			.default({ mode: 'off' }),
 		workers: Schema.array(
 			Schema.object({
 				name: Schema.string().description('worker 名称，工具调用时使用。'),
@@ -89,6 +101,15 @@ function normalizeConfig(raw) {
 		host: typeof source.host === 'string' && source.host !== '' ? source.host : DEFAULT_HOST,
 		port: Number.isInteger(source.port) && /** @type {number} */ (source.port) > 0 ? /** @type {number} */ (source.port) : DEFAULT_PORT,
 		token,
+		exec: (() => {
+			const rawExec = /** @type {Record<string, unknown>} */ (source.exec ?? {});
+			const modes = ['off', 'allowlist', 'any'];
+			const mode = modes.includes(/** @type {string} */ (rawExec.mode)) ? /** @type {string} */ (rawExec.mode) : 'off';
+			const allow = Array.isArray(rawExec.allow)
+				? rawExec.allow.map(String).filter((entry) => entry.trim() !== '')
+				: ['git', 'node', 'pnpm', 'npm', 'python', 'python3', 'dotnet', 'ffmpeg'];
+			return { mode, allow };
+		})(),
 		workers: configured
 			.map((entry) => /** @type {Record<string, unknown>} */ (entry ?? {}))
 			.filter((entry) => entry.name !== undefined && entry.url !== undefined)
@@ -195,6 +216,36 @@ export function apply(ctx, config) {
 							return Object.values(peers).some((peer) => `Bearer ${peer.token}` === presented);
 						},
 						armSession,
+						onExec: async (body) => {
+							const pluginDir = dirname(fileURLToPath(import.meta.url));
+							const policy = resolved.exec;
+							const plan = planExec(String(body?.command ?? ''), policy);
+							const audit = async (outcome) =>
+								appendAudit(
+									{
+										controller: String(body?.controller ?? 'unknown'),
+										command: String(body?.command ?? ''),
+										cwd: String(body?.cwd ?? ''),
+										policy: policy.mode,
+										...outcome,
+									},
+									resolve(homedir(), '.dsh', 'device-fleet-exec.log'),
+								);
+							if (!plan.ok) {
+								await audit({ status: 'denied', reason: plan.reason });
+								return { status: 'denied', reason: plan.reason };
+							}
+							const requestedCwd = typeof body?.cwd === 'string' && body.cwd !== '' ? resolve(String(body.cwd)) : pluginDir;
+							const cwdVerdict = checkCwd(requestedCwd, pluginDir, policy.mode);
+							if (!cwdVerdict.ok) {
+								await audit({ status: 'denied', reason: cwdVerdict.reason });
+								return { status: 'denied', reason: cwdVerdict.reason };
+							}
+							const timeoutMs = Math.min(Math.max(Number(body?.timeoutMs) || 120_000, 1_000), 600_000);
+							const result = await runExec(plan.argv, { cwd: requestedCwd, timeoutMs });
+							await audit({ status: result.status, exitCode: result.exitCode, durationMs: result.durationMs, truncated: result.truncated });
+							return result;
+						},
 						onAsk: async (body) => {
 							const questions = Array.isArray(body?.questions) ? body.questions : [];
 							if (questions.length === 0) return null;
