@@ -28,6 +28,7 @@ import { createToolDefinitions } from './lib/tools.js';
 import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
 import { acceptCallbackOnce, clearNotified, getDispatch, markNotified, noteArm, noteAsk, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
 import { askHuman } from './lib/ask-tool.js';
+import { decideDelivery } from './lib/notify.js';
 import { checkCwd, checkEnv, planExec } from './lib/exec-guard.js';
 import { appendAudit, runExec } from './lib/exec-run.js';
 import { dirname, resolve } from 'node:path';
@@ -64,6 +65,9 @@ try {
 		host: Schema.string().default(DEFAULT_HOST).description('worker 监听地址。'),
 		port: Schema.natural().default(DEFAULT_PORT).description('worker 监听端口。'),
 		token: Schema.string().default('').description('留空则 worker 首次激活时自动生成并持久化，controller 首连自动配对（TOFU）；显式设置时两端必须一致。'),
+		notify: Schema.union(['panel', 'chat'])
+			.default('panel')
+			.description('Where a worker completion goes. panel (default) parks it for fleet_notices so a machine event never interrupts or impersonates the human; chat writes it into the conversation like a user message (legacy behaviour, interrupts).'),
 		exec: Schema.object({
 			mode: Schema.union(['off', 'allowlist', 'any']).default('off').description('fleet_exec policy: off refuses everything; allowlist permits exec.allow programs inside the plugin directory; any also permits other directories.'),
 			allow: Schema.array(Schema.string())
@@ -101,6 +105,7 @@ function normalizeConfig(raw) {
 		host: typeof source.host === 'string' && source.host !== '' ? source.host : DEFAULT_HOST,
 		port: Number.isInteger(source.port) && /** @type {number} */ (source.port) > 0 ? /** @type {number} */ (source.port) : DEFAULT_PORT,
 		token,
+		notify: source.notify === 'chat' ? 'chat' : 'panel',
 		exec: (() => {
 			const rawExec = /** @type {Record<string, unknown>} */ (source.exec ?? {});
 			const modes = ['off', 'allowlist', 'any'];
@@ -282,14 +287,17 @@ export function apply(ctx, config) {
 							// only noise, so suppress repeats within the window.
 							if (!acceptCallbackOnce(String(body?.sessionId ?? ''))) return false;
 							const agent = ctx.agents.get(target);
+							const delivery = decideDelivery({ mode: resolved.notify, agentLive: agent !== undefined });
+							// Park it first: the notice must survive whether or not anyone
+							// is looking, and it must never be lost to a failed prompt.
+							await appendPendingNotice({
+								controllerSessionId: target,
+								sessionId: String(body?.sessionId ?? ''),
+								device: String(body?.device ?? 'worker'),
+								title: body?.title === undefined ? undefined : String(body.title),
+							}).catch(() => {});
+							if (delivery === 'store') return { ok: true, woke: false, mode: 'panel' };
 							if (agent === undefined) {
-								// The controller window is closed: keep the notice and
-								// deliver it when that session comes back.
-								await appendPendingNotice({
-									controllerSessionId: target,
-									sessionId: String(body?.sessionId ?? ''),
-									device: String(body?.device ?? 'worker'),
-								}).catch(() => {});
 								return false;
 							}
 							const text =
@@ -478,6 +486,7 @@ export function apply(ctx, config) {
 					if (sessionId === '') return;
 					takePendingNotices(sessionId)
 						.then(async (notices) => {
+							if (resolved.notify !== 'chat') return;
 							for (const notice of notices) {
 								try {
 									await ctx.sessionController.prompt(
