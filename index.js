@@ -26,7 +26,7 @@ import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { appendPendingNotice, ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers, takePendingNotices } from './lib/credentials.js';
-import { getDispatch, markNotified, noteCallback, wasNotified } from './lib/registry.js';
+import { getDispatch, markNotified, noteCallback, noteQuestionProbe, wasNotified } from './lib/registry.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
@@ -110,6 +110,24 @@ export function apply(ctx, config) {
 		const role = resolved.role;
 
 		const deviceName = hostname() || 'dsh-worker';
+		// `user-questions/request` is an Agent-scoped waterfall, so a plugin-root
+		// listener never sees it (measured). Arm the listener on each dispatched
+		// Agent's own scope instead. Both role branches use it, so it lives above
+		// them: the worker half arms a session right after recording a dispatch,
+		// and the global session feed covers sessions created later.
+		const armedSessions = new Set();
+		const armSession = async (sessionId) => {
+			const id = String(sessionId);
+			if (id === '' || armedSessions.has(id)) return false;
+			const agent = ctx.agents.get(id);
+			if (agent === undefined || agent.ctx === undefined) return false;
+			agent.ctx.on('user-questions/request', async (request, next) => {
+				noteQuestionProbe(request);
+				return next();
+			});
+			armedSessions.add(id);
+			return true;
+		};
 		/** What the page shows; `apply` keeps it in step with the listener. */
 		const state = {
 			role,
@@ -151,6 +169,7 @@ export function apply(ctx, config) {
 							const peers = await pinnedPeers();
 							return Object.values(peers).some((peer) => `Bearer ${peer.token}` === presented);
 						},
+						armSession,
 						onCallback: async (body) => {
 							const target = String(body?.controllerSessionId ?? '');
 							if (target === '') return false;
@@ -264,6 +283,13 @@ export function apply(ctx, config) {
 		}
 
 		if (role.includes('controller')) {
+			ctx.effect(() =>
+				ctx.on('api-session/added', (summary) => {
+					const sessionId = String(summary?.sessionId ?? '');
+					if (sessionId === '' || getDispatch(sessionId) === undefined) return;
+					void armSession(sessionId);
+				}),
+			);
 			// A session can appear again after its window was closed; parked
 			// completion notices are delivered then instead of being lost.
 			ctx.effect(() =>
