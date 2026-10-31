@@ -26,12 +26,12 @@ import { randomUUID } from 'node:crypto';
 import { startWorkerServer } from './lib/server.js';
 import { createToolDefinitions } from './lib/tools.js';
 import { ensureWorkerToken, isClaimable, markClaimed, pinPeer, pinnedPeers } from './lib/credentials.js';
-import { getDispatch } from './lib/registry.js';
+import { getDispatch, noteCallback } from './lib/registry.js';
 import { startAnnouncing } from './lib/discovery.js';
 import { mountFleetPanel } from './lib/panel.js';
 
 /** @type {string[]} Services this plugin needs from the Host composition. */
-export const inject = ['tools', 'workspaceRegistry', 'sessionController', 'sessionQuery', 'webServer'];
+export const inject = ['tools', 'agents', 'workspaceRegistry', 'sessionController', 'sessionQuery', 'webServer'];
 
 /** Auto-discovered workers, shared across tool calls and populated by fleet_list_workers. */
 const discovered = new Map();
@@ -197,22 +197,44 @@ export function apply(ctx, config) {
 					closeServer = handle.close;
 					// Event-driven completion: the worker only ever reacts to the
 					// Host's own status event, so a controller never has to poll.
+					// `agent/status` is a scoped event (this: Scoped<Agent>), so a
+					// plugin-root listener never sees it. `api-session/status` is the
+					// unscoped running-state feed: same signal, deliverable here.
 					ctx.effect(() =>
-						ctx.on('agent/status', (payload) => {
-							if (payload?.status !== 'idle') return;
-							const dispatched = getDispatch(String(payload?.agent?.id ?? ''));
+						ctx.on('api-session/status', (sessionId, running) => {
+							if (running !== false) return;
+							const id = String(sessionId);
+							const dispatched = getDispatch(id);
 							if (dispatched === undefined) return;
 							fetch(`${dispatched.callbackUrl}/fleet/callback`, {
 								method: 'POST',
 								headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
 								body: JSON.stringify({
 									device: deviceName,
-									sessionId: String(payload?.agent?.id ?? ''),
+									sessionId: id,
 									controllerSessionId: dispatched.controllerSessionId,
 									at: Date.now(),
 								}),
 								signal: AbortSignal.timeout(8_000),
-							}).catch(() => {});
+							})
+								.then(async (response) => {
+									const text = await response.text().catch(() => '');
+									let body = {};
+									try {
+										body = JSON.parse(text);
+									} catch {
+										body = { raw: text.slice(0, 200) };
+									}
+									noteCallback({
+										sessionId: id,
+										ok: response.ok,
+										woke: body?.woke === true,
+										...(response.ok ? {} : { error: `HTTP ${response.status}: ${JSON.stringify(body).slice(0, 200)}` }),
+									});
+								})
+								.catch((error) => {
+									noteCallback({ sessionId: id, ok: false, error: error instanceof Error ? error.message : String(error) });
+								});
 						}),
 					);
 					try {
