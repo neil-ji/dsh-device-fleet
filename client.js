@@ -32,88 +32,105 @@ window.__ModuleLoader__.load({
 		}
 
 		const CSS = `
-.fleet-deck{position:relative;min-height:100vh;color:#e9f2fb;background:#04070d;overflow-x:hidden}
-.fleet-deck::before{content:"";position:fixed;inset:0;background-image:url('${API}/assets/space-bg.png');background-size:cover;background-position:74% 40%;opacity:.96;z-index:-2}
-.fleet-deck::after{content:"";position:fixed;inset:0;z-index:-1;background:repeating-linear-gradient(0deg,rgba(130,200,255,.022) 0 1px,transparent 1px 3px),radial-gradient(130% 100% at 10% 6%,rgba(10,22,40,.12),rgba(4,7,13,.42) 52%,rgba(3,6,11,.78) 100%)}
-.fleet-hud{max-width:1160px;margin:0 auto;padding:30px 34px 64px;display:flex;flex-direction:column;gap:24px}
+.fleet-deck{position:relative;min-height:100vh;background:#05070a;color:#c8d6c9;overflow-x:hidden;font-size:13px}
+.fleet-deck::before{content:"";position:fixed;inset:0;z-index:-3;background:#05070a url('${API}/assets/space-bg.png') center 45%/cover no-repeat;opacity:.5;filter:saturate(.85) contrast(1.05)}
+.fleet-deck::after{content:"";position:fixed;inset:0;z-index:-2;background:radial-gradient(115% 85% at 50% 40%,rgba(5,7,10,.25),rgba(5,7,10,.72) 58%,#05070a 100%),repeating-linear-gradient(0deg,rgba(140,240,176,.028) 0 1px,transparent 1px 3px)}
+.fleet-grid{position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:linear-gradient(rgba(140,240,176,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(140,240,176,.045) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(90% 70% at 50% 30%,#000 20%,transparent 85%)}
+.fleet-hud{position:relative;max-width:1200px;margin:0 auto;padding:0 26px 40px;display:flex;flex-direction:column}
+.fleet-online{color:#8cf0b0}
+.fleet-offline{color:#ff8a80}
 .fleet-mono{font-family:var(--dsw-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-variant-numeric:tabular-nums}
-.fleet-top{display:flex;align-items:center;gap:18px;padding-bottom:20px;border-bottom:1px solid rgba(120,190,255,.16)}
-.fleet-sigil{width:76px;height:76px;flex:0 0 auto;background-image:url('${API}/assets/insignia.png');background-size:contain;background-repeat:no-repeat;background-position:center;mix-blend-mode:screen;filter:drop-shadow(0 0 16px rgba(85,230,210,.5))}
+/* ---- 顶部状态条 ---- */
+.fleet-strip{display:flex;align-items:center;gap:0;border-bottom:1px solid rgba(140,240,176,.22);padding:9px 0;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:#7d8f80}
+.fleet-strip-cell{padding:0 16px;border-right:1px solid rgba(140,240,176,.16);white-space:nowrap}
+.fleet-strip-cell:first-child{padding-left:0}
+.fleet-strip-cell:last-child{border-right:0;margin-left:auto;padding-right:0}
+.fleet-strip b{color:#a9bdaa;font-weight:500}
+/* ---- 头部 ---- */
+.fleet-top{display:flex;align-items:center;gap:16px;padding:20px 0 16px;border-bottom:1px solid rgba(140,240,176,.14)}
+.fleet-sigil{width:52px;height:52px;flex:0 0 auto;background:url('${API}/assets/insignia.png') center/contain no-repeat;mix-blend-mode:screen;opacity:.85;filter:hue-rotate(-28deg) saturate(1.1)}
 .fleet-id{min-width:0}
-.fleet-kicker{margin:0;font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:#7f9ab5}
-.fleet-title{margin:3px 0 0;font-size:26px;font-weight:600;letter-spacing:.08em;line-height:32px;text-shadow:0 0 22px rgba(85,230,210,.18)}
-.fleet-sub{margin:5px 0 0;font-size:12.5px;line-height:19px;color:#93a9c0;max-width:60ch}
-.fleet-top-right{margin-left:auto;display:flex;align-items:center;gap:12px;flex:0 0 auto}
-.fleet-clock{font-size:12.5px;color:#a8bdd3;letter-spacing:.12em}
-.fleet-order-badge{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid rgba(255,197,107,.5);border-radius:2px;color:#ffc56b;font-size:11px;letter-spacing:.14em;background:rgba(255,197,107,.08);text-transform:uppercase}
-.fleet-order-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:#ffc56b;box-shadow:0 0 10px #ffc56b}
-.fleet-btn{font:inherit;font-size:12.5px;letter-spacing:.1em;padding:7px 15px;border-radius:2px;border:1px solid rgba(120,190,255,.32);background:rgba(10,20,34,.72);color:#d6e6f7;cursor:pointer;transition:border-color .15s,background .15s}
-.fleet-btn:hover{background:rgba(24,44,70,.9);border-color:rgba(120,190,255,.6)}
-.fleet-btn:focus-visible{outline:2px solid #55e6d2;outline-offset:2px}
-.fleet-btn[disabled]{opacity:.45;cursor:default}
-.fleet-btn-primary{border-color:transparent;background:#55e6d2;color:#04202a;font-weight:600}
-.fleet-btn-primary:hover{background:#83f2e2}
-.fleet-telemetry{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0}
-.fleet-gauge{padding:14px 20px 14px 18px;display:flex;flex-direction:column;gap:4px;min-width:0;border-left:2px solid rgba(85,230,210,.35)}
-.fleet-gauge+.fleet-gauge{border-left-color:rgba(120,190,255,.16)}
-.fleet-gauge-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#6b809a}
-.fleet-gauge-value{font-size:16px;line-height:24px;color:#eef6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fleet-gauge-note{font-size:11.5px;color:#7f95ac}
-.fleet-online{color:#55e6d2}
-.fleet-offline{color:#ff7b72}
-.fleet-block{border:1px solid rgba(120,190,255,.13);border-radius:3px;background:rgba(5,10,18,.55)}
-.fleet-block-head{display:flex;align-items:baseline;gap:10px;padding:13px 18px 11px;border-bottom:1px solid rgba(120,190,255,.1)}
-.fleet-block-title{margin:0;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#a6bcd4}
-.fleet-block-note{margin-left:auto;font-size:11px;color:#7f95ac;letter-spacing:.1em}
-.fleet-ships{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:16px 18px}
-.fleet-ship{position:relative;display:flex;gap:14px;align-items:center;padding:12px 14px;border:1px solid rgba(120,190,255,.14);border-left:2px solid rgba(85,230,210,.55);border-radius:2px;background:linear-gradient(120deg,rgba(12,24,40,.92),rgba(6,12,22,.82));min-width:0}
-.fleet-ship.is-offline{opacity:.5;border-left-color:rgba(255,123,114,.6)}
-.fleet-ship-art{width:104px;height:58px;flex:0 0 auto;background-image:url('${API}/assets/ship.png');background-size:contain;background-repeat:no-repeat;background-position:center;mix-blend-mode:screen;filter:brightness(1.5) contrast(1.15) drop-shadow(0 0 14px rgba(85,230,210,.22))}
-.fleet-ship-body{min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 auto}
-.fleet-ship-name{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.02em}
-.fleet-ship-meta{font-size:11px;color:#8299b0;letter-spacing:.08em;display:flex;align-items:center;gap:8px}
-.fleet-bars{display:flex;align-items:flex-end;gap:2px;height:13px}
-.fleet-bars i{display:block;width:3px;background:#55e6d2;border-radius:1px;opacity:.9}
-.fleet-bars i:nth-child(1){height:5px}.fleet-bars i:nth-child(2){height:8px}.fleet-bars i:nth-child(3){height:11px}.fleet-bars i:nth-child(4){height:13px}
-.fleet-bars.is-low i{background:#ffc56b;opacity:.6}
-.fleet-orders{display:flex;flex-direction:column;margin:0;padding:4px 10px 8px;list-style:none}
-.fleet-order{display:grid;grid-template-columns:16px 112px minmax(0,1fr) auto;align-items:center;gap:12px;padding:11px 10px;border-bottom:1px solid rgba(120,190,255,.055);font-size:13px}
+.fleet-kicker{margin:0;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#6f8072}
+.fleet-title{margin:2px 0 0;font-size:22px;font-weight:600;letter-spacing:.16em;line-height:28px;color:#dcebdd}
+.fleet-sub{margin:3px 0 0;font-size:12px;line-height:18px;color:#8a9b8c;max-width:64ch;letter-spacing:.01em}
+.fleet-top-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.fleet-badge{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid rgba(242,193,78,.5);color:#f2c14e;font-size:10px;letter-spacing:.16em;text-transform:uppercase;background:rgba(242,193,78,.07)}
+.fleet-badge::before{content:"";width:5px;height:5px;background:#f2c14e;box-shadow:0 0 6px rgba(242,193,78,.8)}
+/* ---- 按钮 ---- */
+.fleet-btn{font:inherit;font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:6px 13px;border:1px solid rgba(140,240,176,.3);background:rgba(140,240,176,.04);color:#a9bdaa;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.fleet-btn:hover{background:rgba(140,240,176,.12);color:#dcebdd;border-color:rgba(140,240,176,.5)}
+.fleet-btn:focus-visible{outline:1px solid #8cf0b0;outline-offset:2px}
+.fleet-btn[disabled]{opacity:.4;cursor:default}
+.fleet-btn-primary{border-color:#8cf0b0;background:#8cf0b0;color:#05070a;font-weight:700}
+.fleet-btn-primary:hover{background:#a6f5c2;border-color:#a6f5c2;color:#05070a}
+/* ---- 主区两栏 ---- */
+.fleet-main{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:0;border-bottom:1px solid rgba(140,240,176,.14)}
+.fleet-col{padding:14px 0 16px;min-width:0}
+.fleet-col+.fleet-col{border-left:1px solid rgba(140,240,176,.14);padding-left:20px;margin-left:20px}
+.fleet-col--rail{padding-right:20px}
+.fleet-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.fleet-head h3{margin:0;font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:#8fa591;font-weight:500}
+.fleet-head span{margin-left:auto;font-size:10px;letter-spacing:.14em;color:#6f8072}
+/* ---- 舰船名册 ---- */
+.fleet-roster{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}
+.fleet-ship{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:9px;padding:8px 6px;border-bottom:1px solid rgba(140,240,176,.08);font-size:12.5px}
+.fleet-ship:last-child{border-bottom:0}
+.fleet-ship:hover{background:rgba(140,240,176,.05)}
+.fleet-ship-no{font-size:10px;color:#5f7062;letter-spacing:.1em}
+.fleet-ship-name{color:#cfe0d1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fleet-ship-name.is-offline{color:#7c6666}
+.fleet-glyphs{display:flex;align-items:flex-end;gap:2px;height:11px}
+.fleet-glyphs i{display:block;width:2px;background:#6fbf86;opacity:.85}
+.fleet-glyphs i:nth-child(1){height:4px}.fleet-glyphs i:nth-child(2){height:7px}.fleet-glyphs i:nth-child(3){height:11px}
+.fleet-glyphs.is-down i{background:#c2554f;opacity:.55}
+.fleet-ship-art{width:56px;height:30px;flex:0 0 auto;background:url('${API}/assets/ship.png') center/contain no-repeat;mix-blend-mode:screen;opacity:.55;filter:brightness(1.4)}
+.fleet-ship-lat{font-size:10px;color:#6f8072;letter-spacing:.08em;text-align:right;min-width:46px}
+/* ---- 作战指令 ---- */
+.fleet-orders{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}
+.fleet-order{display:grid;grid-template-columns:14px 104px minmax(0,1fr) auto;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid rgba(140,240,176,.08);font-size:12.5px}
 .fleet-order:last-child{border-bottom:0}
-.fleet-order:hover{background:rgba(120,190,255,.045)}
-.fleet-sigil-dot{width:7px;height:7px;border-radius:50%;justify-self:center}
-.fleet-sigil-dot.live{background:#55e6d2;box-shadow:0 0 12px #55e6d2;animation:fleet-pulse 2.4s ease-in-out infinite}
-.fleet-sigil-dot.ok{background:#6fdc8c}
-.fleet-sigil-dot.warn{background:#ffc56b;box-shadow:0 0 9px rgba(255,197,107,.75)}
-.fleet-order-code{font-size:11.5px;color:#9db4cc;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fleet-order-main{display:flex;align-items:baseline;gap:8px;min-width:0}
-.fleet-order-device{color:#eef6ff;font-weight:600;white-space:nowrap}
-.fleet-order-sub{font-size:11px;color:#6b809a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fleet-order-right{display:flex;align-items:center;gap:14px;flex:0 0 auto}
-.fleet-chip{font-size:10px;letter-spacing:.16em;text-transform:uppercase;padding:3px 9px;border:1px solid rgba(120,190,255,.25);border-radius:2px;color:#a6bcd4;white-space:nowrap}
-.fleet-chip.live{color:#55e6d2;border-color:rgba(85,230,210,.45);background:rgba(85,230,210,.06)}
-.fleet-chip.ok{color:#6fdc8c;border-color:rgba(111,220,140,.42);background:rgba(111,220,140,.06)}
-.fleet-chip.warn{color:#ffc56b;border-color:rgba(255,197,107,.45);background:rgba(255,197,107,.06)}
-.fleet-age{font-size:11px;color:#7590a8;min-width:66px;text-align:right}
-.fleet-empty{padding:22px 18px;margin:0;font-size:12.5px;line-height:20px;color:#7f95ac}
-.fleet-params{border:1px solid rgba(120,190,255,.13);border-radius:3px;background:rgba(5,10,18,.5)}
-.fleet-params>summary{cursor:pointer;padding:13px 18px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#93a9c0;list-style:none}
+.fleet-order:hover{background:rgba(140,240,176,.05)}
+.fleet-order.is-selected{background:rgba(140,240,176,.09);box-shadow:inset 2px 0 0 #8cf0b0}
+.fleet-dot{width:6px;height:6px;justify-self:center}
+.fleet-dot.live{background:#8cf0b0;animation:fleet-blink 1.6s steps(2,end) infinite}
+.fleet-dot.ok{background:#6fbf86}
+.fleet-dot.warn{background:#f2c14e}
+.fleet-dot.dead{background:#c2554f}
+.fleet-order-code{font-size:10.5px;color:#8fa591;letter-spacing:.12em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fleet-order-main{display:flex;align-items:baseline;gap:9px;min-width:0}
+.fleet-order-device{color:#dcebdd;white-space:nowrap}
+.fleet-order-sub{font-size:10.5px;color:#6f8072;letter-spacing:.06em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fleet-order-right{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+.fleet-state{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;padding:2px 7px;border:1px solid rgba(140,240,176,.22);color:#8fa591;white-space:nowrap}
+.fleet-state.live{color:#8cf0b0;border-color:rgba(140,240,176,.45)}
+.fleet-state.ok{color:#6fbf86;border-color:rgba(111,191,134,.4)}
+.fleet-state.warn{color:#f2c14e;border-color:rgba(242,193,78,.45)}
+.fleet-age{font-size:10px;color:#6f8072;min-width:60px;text-align:right;letter-spacing:.06em}
+.fleet-empty{margin:0;padding:16px 6px;font-size:12px;line-height:19px;color:#748577}
+/* ---- 底部战报 ---- */
+.fleet-report{border-bottom:1px solid rgba(140,240,176,.14);padding:14px 0 16px}
+.fleet-report-body{margin:0;font-size:12px;line-height:19px;color:#a7b8a9;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;border-left:2px solid rgba(140,240,176,.35);padding-left:12px}
+.fleet-report-body.is-empty{color:#6f8072;border-left-color:rgba(140,240,176,.15)}
+/* ---- 参数 ---- */
+.fleet-params{margin-top:14px;border-top:1px solid rgba(140,240,176,.14)}
+.fleet-params>summary{cursor:pointer;padding:12px 0;font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#8fa591;list-style:none}
 .fleet-params>summary::-webkit-details-marker{display:none}
-.fleet-params>summary::before{content:"▸ ";color:#55e6d2}
-.fleet-params[open]>summary::before{content:"▾ "}
-.fleet-params-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;padding:6px 18px 18px}
-.fleet-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fleet-params>summary::before{content:"[+] ";color:#6fbf86}
+.fleet-params[open]>summary::before{content:"[−] "}
+.fleet-params-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;padding:2px 0 16px}
+.fleet-field{display:flex;flex-direction:column;gap:5px;min-width:0}
 .fleet-field-wide{grid-column:1/-1}
-.fleet-label{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#6b809a}
-.fleet-input,.fleet-select{font:inherit;font-size:13px;padding:8px 11px;border-radius:2px;border:1px solid rgba(120,190,255,.2);background:rgba(3,8,16,.92);color:#eef6ff;min-width:0}
-.fleet-input:focus-visible,.fleet-select:focus-visible{outline:2px solid #55e6d2;outline-offset:1px}
-.fleet-actions{display:flex;align-items:center;gap:12px;grid-column:1/-1;margin-top:2px}
-.fleet-error{font-size:12.5px;color:#ff7b72}
-.fleet-ok{font-size:12.5px;color:#6fdc8c}
-.fleet-hint{font-size:11.5px;color:#6b809a;line-height:17px}
-.fleet-foot{display:flex;flex-wrap:wrap;gap:18px;font-size:10.5px;letter-spacing:.14em;color:#68809a;padding-top:10px;border-top:1px solid rgba(120,190,255,.1)}
-@keyframes fleet-pulse{0%,100%{opacity:1;box-shadow:0 0 12px #55e6d2}50%{opacity:.4;box-shadow:0 0 4px #55e6d2}}
-@media (prefers-reduced-motion:reduce){.fleet-sigil-dot.live{animation:none}}
-@media (max-width:760px){.fleet-hud{padding:20px 16px 44px}.fleet-order{grid-template-columns:14px minmax(0,1fr) auto}.fleet-order-code{display:none}.fleet-ship-art{width:76px;height:44px}}
+.fleet-label{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#6f8072}
+.fleet-input,.fleet-select{font:inherit;font-size:12px;padding:6px 9px;border:1px solid rgba(140,240,176,.22);background:rgba(0,0,0,.5);color:#dcebdd;min-width:0}
+.fleet-input:focus-visible,.fleet-select:focus-visible{outline:1px solid #8cf0b0;outline-offset:1px}
+.fleet-actions{display:flex;align-items:center;gap:12px;grid-column:1/-1;margin-top:2px;flex-wrap:wrap}
+.fleet-error{font-size:11.5px;color:#ff8a80}
+.fleet-ok{font-size:11.5px;color:#8cf0b0}
+.fleet-hint{font-size:11px;color:#6f8072;line-height:17px}
+.fleet-foot{display:flex;flex-wrap:wrap;gap:18px;padding-top:10px;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:#5f7062}
+@keyframes fleet-blink{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.fleet-dot.live{animation:none}}
+@media (max-width:860px){.fleet-main{grid-template-columns:1fr}.fleet-col+.fleet-col{border-left:0;padding-left:0;margin-left:0;border-top:1px solid rgba(140,240,176,.14)}.fleet-strip{flex-wrap:wrap}.fleet-order{grid-template-columns:14px minmax(0,1fr) auto}.fleet-order-code{display:none}}
 `
 
 		/** Page token injected by the host into index.html. */
@@ -164,37 +181,32 @@ window.__ModuleLoader__.load({
 		}
 
 		/**
-		 * One ship entry for a worker in the fleet.
-		 * @param {{ worker: Record<string, any> }} props Component props.
+		 * One roster row: hull index, name, link glyphs, latency. Mirrors the left
+		 * rail of a fleet RTS rather than a card grid — the roster is scanned
+		 * vertically, not appreciated as a gallery.
+		 * @param {{ worker: Record<string, any>, index: number }} props Component props.
 		 */
-		function Ship(props) {
+		function ShipRow(props) {
 			const worker = props.worker || {}
 			const online = worker.online === true
-			const latency = typeof worker.latencyMs === 'number' && worker.latencyMs > 0 ? `${worker.latencyMs} ms` : '本机'
+			const latency = typeof worker.latencyMs === 'number' && worker.latencyMs > 0 ? `${worker.latencyMs}ms` : '本机'
 			return h(
-				'div',
-				{ className: `fleet-ship${online ? '' : ' is-offline'}` },
-				h('span', { className: 'fleet-ship-art', 'aria-hidden': 'true' }),
+				'li',
+				{ className: 'fleet-ship' },
+				h('span', { className: 'fleet-ship-no fleet-mono' }, String(props.index + 1).padStart(2, '0')),
 				h(
-					'div',
-					{ className: 'fleet-ship-body' },
-					h('span', { className: 'fleet-ship-name' }, String(worker.name || '未命名节点')),
-					h(
-						'span',
-						{ className: 'fleet-ship-meta fleet-mono' },
-						online ? h('span', { className: 'fleet-online' }, '在线') : h('span', { className: 'fleet-offline' }, '失联'),
-						' · ',
-						latency,
-					),
+					'span',
+					{ className: 'fleet-ship-name' },
+					h('span', { className: online ? '' : 'is-offline' }, String(worker.name || '未命名节点')),
 				),
 				h(
 					'span',
-					{ className: `fleet-bars${online && typeof worker.latencyMs === 'number' && worker.latencyMs > 40 ? ' is-low' : ''}`, 'aria-hidden': 'true' },
-					h('i'),
+					{ className: `fleet-glyphs${online ? '' : ' is-down'}`, 'aria-hidden': 'true', title: online ? '链路正常' : '失联' },
 					h('i'),
 					h('i'),
 					h('i'),
 				),
+				h('span', { className: 'fleet-ship-lat fleet-mono' }, latency),
 			)
 		}
 
@@ -216,18 +228,12 @@ window.__ModuleLoader__.load({
 				}
 				setError('')
 				setState(json.data)
-				setForm((current) => ({
-					role: json.data.role,
-					host: json.data.host,
-					port: String(json.data.port),
-					token: current.token,
-				}))
+				setForm((current) => ({ role: json.data.role, host: json.data.host, port: String(json.data.port), token: current.token }))
 			}, [])
 
 			useEffect(() => {
 				alive.current = true
 				void load()
-				// A console should look alive: refresh telemetry on a slow beat.
 				const beat = setInterval(() => {
 					if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
 					void load()
@@ -247,12 +253,9 @@ window.__ModuleLoader__.load({
 				if (form.token !== '') patch.token = form.token
 				const json = await api('/config', patch)
 				setBusy('')
-				if (!json.ok) {
-					setError(json.why || '写入失败')
-					return
-				}
+				if (!json.ok) return setError(json.why || '写入失败')
 				setError('')
-				setNotice('命令已下达：配置重载中…')
+				setNotice('指令已下达 · 配置重载中')
 				setTimeout(() => void load(), 400)
 			}, [form, load])
 
@@ -261,12 +264,9 @@ window.__ModuleLoader__.load({
 				setNotice('')
 				const json = await api('/scan', {})
 				setBusy('')
-				if (!json.ok) {
-					setError(json.why || '扫描失败')
-					return
-				}
+				if (!json.ok) return setError(json.why || '扫描失败')
 				setError('')
-				setNotice(`扫描完成：捕获 ${json.data.discovered.length} 个信号源`)
+				setNotice(`扫描完成 · 捕获 ${json.data.discovered.length} 个信号源`)
 				void load()
 			}, [load])
 
@@ -285,20 +285,33 @@ window.__ModuleLoader__.load({
 			}
 
 			const data = state || {}
-			const listening = data.listening === true
 			const view = data.view || { tasks: [], noticeCount: 0 }
 			const tasks = view.tasks || []
 			const workers = data.workersOnline || []
-			const onlineCount = workers.filter((worker) => worker.online).length
-			const keyHint = data.tokenSource === 'explicit' ? '显式配置' : data.tokenSource === 'generated' ? '自动生成' : '未就绪'
+			const online = workers.filter((worker) => worker.online).length
 			const utc = clock.toISOString().slice(11, 19)
+			const link = data.listening === true ? (online === workers.length ? 'NOMINAL' : 'DEGRADED') : 'OFFLINE'
+			const keyState = data.tokenSource === 'explicit' ? '显式' : data.tokenSource === 'generated' ? '自动' : '未就绪'
 
 			return h(
 				'div',
 				{ className: 'fleet-deck' },
+				h('div', { className: 'fleet-grid', 'aria-hidden': 'true' }),
 				h(
 					'div',
 					{ className: 'fleet-hud' },
+					// ---- 顶部状态条 ----
+					h(
+						'div',
+						{ className: 'fleet-strip fleet-mono' },
+						h('span', { className: 'fleet-strip-cell' }, 'NODE ', h('b', null, data.deviceName || '—')),
+						h('span', { className: 'fleet-strip-cell' }, 'CH ', h('b', null, `${data.host || '—'}:${data.port || '—'}`)),
+						h('span', { className: 'fleet-strip-cell' }, 'LINK ', h('b', { className: link === 'NOMINAL' ? 'fleet-online' : link === 'OFFLINE' ? 'fleet-offline' : '' }, link)),
+						h('span', { className: 'fleet-strip-cell' }, 'KEYS ', h('b', null, keyState)),
+						h('span', { className: 'fleet-strip-cell' }, 'ENGAGED ', h('b', null, `${tasks.length}`)),
+						h('span', { className: 'fleet-strip-cell' }, `${utc}Z`),
+					),
+					// ---- 标题 ----
 					h(
 						'header',
 						{ className: 'fleet-top' },
@@ -306,107 +319,75 @@ window.__ModuleLoader__.load({
 						h(
 							'div',
 							{ className: 'fleet-id' },
-							h('p', { className: 'fleet-kicker fleet-mono' }, 'Fleet Command · Command Deck'),
+							h('p', { className: 'fleet-kicker fleet-mono' }, 'Fleet Command / Deck 01'),
 							h('h2', { className: 'fleet-title' }, '舰队指挥舱'),
-							h('p', { className: 'fleet-sub' }, '把重任务派给局域网内其它机器上的 DSH：本机 Agent 用与 GUI 同语义的指令遥控远端工作区与会话，完成后自动回报。'),
+							h('p', { className: 'fleet-sub' }, '把重任务派给局域网内其它机器上的 DSH。指令下达后本机回到待命，战报抵达时再唤醒。'),
 						),
 						h(
 							'div',
 							{ className: 'fleet-top-right' },
 							view.noticeCount > 0
-								? h('span', { className: 'fleet-order-badge', role: 'status', 'aria-atomic': 'true' }, `${view.noticeCount} 份战报待接收`)
+								? h('span', { className: 'fleet-badge fleet-mono', role: 'status', 'aria-atomic': 'true' }, `${view.noticeCount} 份战报待接收`)
 								: null,
-							h('span', { className: 'fleet-clock fleet-mono', title: 'UTC' }, `${utc}Z`),
-							h('button', { type: 'button', className: 'fleet-btn', onClick: () => void load(), disabled: busy !== '' }, '重新扫描遥测'),
+							h('button', { type: 'button', className: 'fleet-btn', onClick: () => void load(), disabled: busy !== '' }, '刷新遥测'),
 						),
 					),
+					// ---- 两栏 ----
 					h(
 						'div',
-						{ className: 'fleet-telemetry' },
+						{ className: 'fleet-main' },
 						h(
-							'div',
-							{ className: 'fleet-gauge' },
-							h('span', { className: 'fleet-gauge-label' }, '编队角色'),
-							h('span', { className: 'fleet-gauge-value' }, ROLE_LABEL[data.role] || data.role || '—'),
-							h('span', { className: 'fleet-gauge-note fleet-mono' }, `本节点 ${data.deviceName || '未命名'}`),
-						),
-						h(
-							'div',
-							{ className: 'fleet-gauge' },
-							h('span', { className: 'fleet-gauge-label' }, '通讯阵列'),
+							'section',
+							{ className: 'fleet-col fleet-col--rail' },
 							h(
-								'span',
-								{ className: 'fleet-gauge-value' },
-								listening ? h('span', { className: 'fleet-online' }, '· 上线') : h('span', { className: 'fleet-offline' }, '· 离线'),
-								h('span', { className: 'fleet-mono', style: { fontSize: '12px', color: '#7c8fa6', marginLeft: '8px' } }, `${data.host}:${data.port}`),
+								'div',
+								{ className: 'fleet-head' },
+								h('h3', null, '舰船'),
+								h('span', { className: 'fleet-mono' }, `${online}/${workers.length || 1} 在线`),
 							),
-							h('span', { className: 'fleet-gauge-note fleet-mono' }, `频段 ${data.lan || '—'}`),
+							workers.length === 0
+								? h('p', { className: 'fleet-empty' }, '编队为空。用「扫描编队」捕获局域网信号源。')
+								: h('ul', { className: 'fleet-roster' }, workers.map((worker, index) => h(ShipRow, { key: worker.name, worker, index }))),
 						),
 						h(
-							'div',
-							{ className: 'fleet-gauge' },
-							h('span', { className: 'fleet-gauge-label' }, '在编舰船'),
-							h('span', { className: 'fleet-gauge-value fleet-mono' }, `${onlineCount}/${workers.length || 1} 在线`),
-							h('span', { className: 'fleet-gauge-note fleet-mono' }, `主机负载 ${data.load ? `${data.load.load1m} / ${data.load.cpus}c` : '—'}`),
-						),
-						h(
-							'div',
-							{ className: 'fleet-gauge' },
-							h('span', { className: 'fleet-gauge-label' }, '识别码'),
-							h('span', { className: 'fleet-gauge-value' }, data.tokenSet ? h('span', { className: 'fleet-online' }, '· 已就绪') : h('span', { className: 'fleet-offline' }, '· 未就绪')),
-							h('span', { className: 'fleet-gauge-note' }, keyHint),
+							'section',
+							{ className: 'fleet-col' },
+							h(
+								'div',
+								{ className: 'fleet-head' },
+								h('h3', null, '作战指令'),
+								h('span', { className: 'fleet-mono' }, tasks.length === 0 ? 'STANDBY' : `${tasks.length} 条`),
+							),
+							tasks.length === 0
+								? h('p', { className: 'fleet-empty' }, '尚无派发记录。让 Agent 用 fleet_dispatch 下达指令，战报会在这里回报。')
+								: h(
+										'ul',
+										{ className: 'fleet-orders' },
+										tasks.map((task) => {
+											const meta = ORDER_STATUS[task.status] || ORDER_STATUS.running
+											return h(
+												'li',
+												{ className: 'fleet-order', key: task.sessionId },
+												h('span', { className: `fleet-dot ${meta.tone}`, 'aria-hidden': 'true' }),
+												h('span', { className: 'fleet-order-code fleet-mono', title: task.sessionId }, orderCode(task.shortId)),
+												h(
+													'div',
+													{ className: 'fleet-order-main' },
+													h('span', { className: 'fleet-order-device' }, task.device || '未知节点'),
+													h('span', { className: 'fleet-order-sub fleet-mono', title: task.sessionId }, `→ ${String(task.shortId || '').toUpperCase()}`),
+												),
+												h(
+													'div',
+													{ className: 'fleet-order-right' },
+													h('span', { className: `fleet-state ${meta.tone}` }, meta.label),
+													h('span', { className: 'fleet-age fleet-mono', title: new Date(task.at).toLocaleString() }, relativeAge(task.ageMs)),
+												),
+											)
+										}),
+									),
 						),
 					),
-					h(
-						'section',
-						{ className: 'fleet-block' },
-						h(
-							'div',
-							{ className: 'fleet-block-head' },
-							h('h3', { className: 'fleet-block-title' }, '舰船'),
-							h('span', { className: 'fleet-block-note fleet-mono' }, `${workers.length} 单位`),
-						),
-						workers.length === 0
-							? h('p', { className: 'fleet-empty' }, '编队为空：尚未配对任何 worker。用「扫描编队」捕获局域网内的信号源。')
-							: h('div', { className: 'fleet-ships' }, workers.map((worker) => h(Ship, { key: worker.name, worker }))),
-					),
-					h(
-						'section',
-						{ className: 'fleet-block' },
-						h(
-							'div',
-							{ className: 'fleet-block-head' },
-							h('h3', { className: 'fleet-block-title' }, '作战指令'),
-							h('span', { className: 'fleet-block-note fleet-mono' }, tasks.length === 0 ? '待命' : `${tasks.length} 条`),
-						),
-						tasks.length === 0
-							? h('p', { className: 'fleet-empty' }, '尚无派发记录。让 Agent 用 fleet_dispatch 把任务交给另一台机器，指令会在这里排队并回传战报。')
-							: h(
-									'ul',
-									{ className: 'fleet-orders' },
-									tasks.map((task) => {
-										const meta = ORDER_STATUS[task.status] || ORDER_STATUS.running
-										return h(
-											'li',
-											{ className: 'fleet-order', key: task.sessionId },
-											h('span', { className: `fleet-sigil-dot ${meta.tone}`, 'aria-hidden': 'true' }),
-											h('span', { className: 'fleet-order-code fleet-mono', title: task.sessionId }, orderCode(task.shortId)),
-											h(
-												'div',
-												{ className: 'fleet-order-main' },
-												h('span', { className: 'fleet-order-device' }, task.device || '未知节点'),
-												h('span', { className: 'fleet-order-sub fleet-mono', title: task.sessionId }, `→ ${String(task.shortId || '').toUpperCase()}`),
-											),
-											h(
-												'div',
-												{ className: 'fleet-order-right' },
-												h('span', { className: `fleet-chip ${meta.tone}` }, meta.label),
-												h('span', { className: 'fleet-age fleet-mono', title: new Date(task.at).toLocaleString() }, relativeAge(task.ageMs)),
-											),
-										)
-									}),
-								),
-					),
+					// ---- 参数 ----
 					h(
 						'details',
 						{ className: 'fleet-params' },
@@ -434,12 +415,7 @@ window.__ModuleLoader__.load({
 								'label',
 								{ className: 'fleet-field' },
 								h('span', { className: 'fleet-label' }, '端口'),
-								h('input', {
-									className: 'fleet-input fleet-mono',
-									value: form.port,
-									inputMode: 'numeric',
-									onChange: (event) => setForm({ ...form, port: event.target.value }),
-								}),
+								h('input', { className: 'fleet-input fleet-mono', value: form.port, inputMode: 'numeric', onChange: (event) => setForm({ ...form, port: event.target.value }) }),
 							),
 							h(
 								'label',
@@ -456,8 +432,8 @@ window.__ModuleLoader__.load({
 							h(
 								'div',
 								{ className: 'fleet-actions' },
-								h('button', { type: 'button', className: 'fleet-btn fleet-btn-primary', onClick: () => void save(), disabled: busy !== '' }, busy === 'save' ? '下达中…' : '下达指令'),
-								h('button', { type: 'button', className: 'fleet-btn', onClick: () => void scan(), disabled: busy !== '' }, busy === 'scan' ? '扫描中…' : '扫描编队'),
+								h('button', { type: 'button', className: 'fleet-btn fleet-btn-primary', onClick: () => void save(), disabled: busy !== '' }, busy === 'save' ? '下达中' : '下达指令'),
+								h('button', { type: 'button', className: 'fleet-btn', onClick: () => void scan(), disabled: busy !== '' }, busy === 'scan' ? '扫描中' : '扫描编队'),
 								error ? h('span', { className: 'fleet-error', role: 'alert' }, error) : null,
 								notice ? h('span', { className: 'fleet-ok', role: 'status' }, notice) : null,
 							),
@@ -467,10 +443,10 @@ window.__ModuleLoader__.load({
 					h(
 						'footer',
 						{ className: 'fleet-foot fleet-mono' },
-						h('span', null, `NODE ${data.deviceName || '—'}`),
-						h('span', null, `CHANNEL ${data.lan || '—'}:${data.port || '—'}`),
-						h('span', null, `KEYS ${data.tokenSet ? 'READY' : 'MISSING'}`),
-						h('span', null, `TASKS ${tasks.length}`),
+						h('span', null, `LOAD ${data.load ? `${data.load.load1m}/${data.load.cpus}c` : '—'}`),
+						h('span', null, `BAND ${data.lan || '—'}`),
+						h('span', null, `ORDERS ${tasks.length}`),
+						h('span', null, `REPORTS ${view.noticeCount || 0}`),
 					),
 				),
 			)
